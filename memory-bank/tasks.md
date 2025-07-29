@@ -110,23 +110,116 @@
 - [x] Add basic room state synchronization
 - [x] Implement player coordination for game start
 
-### 🎮 Phase 4: Game Logic (Level 3 - 5-7 hours)
+### 🎨 Phase 4: Client Authentication & Navigation (Level 2 - 2-3 hours)
 **Status**: ⏳ PENDING
-**Dependencies**: Phase 3 complete
+**Dependencies**: Phase 3 complete (Backend real-time integration)
 
-#### 4.1 Dou Dizhu Core Logic
+#### 4.1 Authentication UI Components
+- [ ] Create login page with username input and validation
+- [ ] Implement authentication API integration with error handling
+- [ ] Add loading states and user feedback
+- [ ] Build automatic redirect logic (authenticated ↔ login)
+- [ ] Create user profile display component
+
+#### 4.2 Client-side Route Protection
+- [ ] Implement protected route wrapper components
+- [ ] Add authentication context and state management
+- [ ] Create automatic token refresh logic
+- [ ] Build logout functionality with state cleanup
+- [ ] Add connection status indicators
+
+### 🌐 Phase 5: Client Real-time Integration (Level 3 - 3-4 hours)
+**Status**: ⏳ PENDING
+**Dependencies**: Phase 4 complete
+
+#### 5.1 Socket.IO Client Setup
+- [ ] Configure Socket.IO client with authentication
+- [ ] Implement connection/disconnection handling
+- [ ] Create real-time event listener management
+- [ ] Add reconnection logic with exponential backoff
+- [ ] Build connection status monitoring
+
+#### 5.2 Redux Real-time Integration
+- [ ] Create Redux slices for real-time data (rooms, users, game state)
+- [ ] Implement Socket.IO middleware for Redux
+- [ ] Add optimistic updates with rollback capability
+- [ ] Create real-time synchronization patterns
+- [ ] Build conflict resolution for concurrent updates
+
+### 🏠 Phase 6: Room Management UI (Level 3 - 4-5 hours)
+**Status**: ⏳ PENDING
+**Dependencies**: Phase 5 complete
+
+#### 6.1 Room List Interface
+- [ ] Create available rooms list with real-time updates
+- [ ] Implement room creation form with validation
+- [ ] Add room filtering and search functionality
+- [ ] Build room capacity and status indicators
+- [ ] Create responsive grid layout for room cards
+
+#### 6.2 Room Interior Interface
+- [ ] Build room details view with player list
+- [ ] Implement join/leave room functionality
+- [ ] Create ready/unready toggle with visual feedback
+- [ ] Add chat system for room communication
+- [ ] Build game start controls (creator only)
+
+#### 6.3 Player Management Components
+- [ ] Create player avatar and status displays
+- [ ] Implement player list with online indicators
+- [ ] Add player action feedback (joined, left, ready changed)
+- [ ] Build waiting for players animations
+- [ ] Create room settings configuration panel
+
+### 🎯 Phase 7: Game Interface Components (Level 3 - 4-6 hours)
+**Status**: ⏳ PENDING
+**Dependencies**: Phase 6 complete
+
+#### 7.1 Game Layout & Structure
+- [ ] Create main game board layout (3-player arrangement)
+- [ ] Implement responsive design for different screen sizes
+- [ ] Build card display areas for each player
+- [ ] Add game status and phase indicators
+- [ ] Create turn indicator and player highlighting
+
+#### 7.2 Card Interface Components
+- [ ] Design and implement card component with Chinese characters
+- [ ] Create hand management with drag-and-drop support
+- [ ] Build card selection and highlighting system
+- [ ] Implement card play area with animation
+- [ ] Add card combination validation feedback
+
+#### 7.3 Game Control Elements
+- [ ] Create bid/pass buttons for landlord selection
+- [ ] Implement play/pass controls for card playing
+- [ ] Add game action history display
+- [ ] Build timer components for turn management
+- [ ] Create game result and scoring display
+
+### 🎮 Phase 8: Game Logic Integration (Level 3 - 5-7 hours)
+**Status**: ⏳ PENDING
+**Dependencies**: Phase 7 complete
+
+#### 8.1 Dou Dizhu Core Logic
 - [ ] Implement card deck representation and shuffling
 - [ ] Create card distribution algorithm (17-17-17 + 3 landlord cards)
 - [ ] Add game phase management (bidding → playing → finished)
 - [ ] Implement basic Dou Dizhu rules validation
 - [ ] Create win/loss condition checking
 
-#### 4.2 Real-time Gameplay
+#### 8.2 Real-time Gameplay
 - [ ] Add real-time card play event handling
 - [ ] Implement turn-based game flow management
 - [ ] Create game state broadcasting to all players
 - [ ] Add game completion and result handling
 - [ ] Implement player scoring and statistics
+
+#### 8.3 Client-Server Game Sync
+- [ ] Integrate client game logic with Socket.IO events
+- [ ] Implement game state reconciliation
+- [ ] Add client-side game validation
+- [ ] Create lag compensation for real-time actions
+- [ ] Build spectator mode for finished games
 
 ## 🎨 CREATIVE PHASES COMPLETED ✅
 

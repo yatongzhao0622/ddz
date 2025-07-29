@@ -93,26 +93,122 @@
 - [x] Player management and ready/unready states
 - [x] Game session initialization
 
-### Phase 4 Readiness
-- [ ] Dou Dizhu core game logic implementation
-- [ ] Card deck representation and shuffling algorithms
-- [ ] Game phase management (bidding → playing → finished)
-- [ ] Card play validation and rule enforcement
+### Phase 4 Client Implementation Readiness
+- [ ] Next.js 15 client application setup
+- [ ] Authentication UI components and flow
+- [ ] Protected route system with token management
+- [ ] Real-time connection status indicators
+
+### Client Architecture Plan
+#### Component Structure
+```
+src/
+├── components/
+│   ├── auth/
+│   │   ├── LoginForm.tsx
+│   │   ├── ProtectedRoute.tsx
+│   │   └── UserProfile.tsx
+│   ├── rooms/
+│   │   ├── RoomList.tsx
+│   │   ├── RoomCard.tsx
+│   │   ├── RoomDetails.tsx
+│   │   └── PlayerList.tsx
+│   ├── game/
+│   │   ├── GameBoard.tsx
+│   │   ├── CardHand.tsx
+│   │   ├── PlayArea.tsx
+│   │   └── GameControls.tsx
+│   └── common/
+│       ├── SocketConnection.tsx
+│       ├── LoadingSpinner.tsx
+│       └── ErrorBoundary.tsx
+```
+
+#### State Management
+```typescript
+// Redux store structure
+interface RootState {
+  auth: {
+    user: User | null;
+    token: string | null;
+    status: 'idle' | 'loading' | 'authenticated' | 'error';
+  };
+  rooms: {
+    list: Room[];
+    currentRoom: Room | null;
+    status: 'idle' | 'loading' | 'error';
+  };
+  game: {
+    session: GameSession | null;
+    players: Player[];
+    status: GameStatus;
+  };
+  socket: {
+    connected: boolean;
+    lastError: string | null;
+  };
+}
+```
+
+#### Real-time Integration
+```typescript
+// Socket.IO event handling
+const socketMiddleware = (socket: Socket) => (store: Store) => (next: Dispatch) => (action: Action) => {
+  if (action.type === 'socket/connect') {
+    socket.connect();
+  }
+  if (action.type === 'socket/disconnect') {
+    socket.disconnect();
+  }
+  if (action.meta?.socket) {
+    socket.emit(action.meta.event, action.payload);
+  }
+  return next(action);
+};
+```
+
+### Implementation Focus
+1. **Authentication Flow**
+   - Login page with validation
+   - Token management
+   - Protected routes
+   - User session handling
+
+2. **Real-time Integration**
+   - Socket.IO client setup
+   - Connection management
+   - Event handling system
+   - State synchronization
+
+3. **Room Management UI**
+   - Room list and creation
+   - Room interior view
+   - Player management
+   - Ready/unready controls
+
+4. **Game Interface**
+   - Game board layout
+   - Card components
+   - Player controls
+   - Game state display
+
+### Technical Requirements
+- **Next.js 15**: App Router with server/client components
+- **React 19**: Latest features with concurrent mode
+- **Redux Toolkit**: State management with Socket.IO integration
+- **TailwindCSS**: Responsive design with Chinese typography
+- **TypeScript**: Full type coverage for components and state
+
+### Development Workflow
+1. Start with authentication components
+2. Build protected route system
+3. Implement Socket.IO integration
+4. Create room management interface
+5. Develop game UI components
+6. Integrate game logic with real-time events
 
 ## Ready for Implementation
-
-### Implementation Path Clear ✅
-All design decisions have been made through comprehensive creative phases:
-- **Architecture**: Hybrid monolith with Redis + Socket.IO patterns defined
-- **UI/UX**: Responsive component hierarchy and interaction patterns designed  
-- **Algorithms**: Game logic, state management, and real-time sync algorithms specified
-
-### Immediate Next Action
-**IMPLEMENT MODE** → Begin Phase 1 Foundation Setup
-- **Technology Stack**: Validated and documented
-- **Architecture Patterns**: Clear implementation guidelines provided
-- **UI Component Structure**: Component hierarchy and responsive design ready
-- **Performance Targets**: Specific benchmarks defined for implementation
+Starting with Phase 4: Client Authentication & Navigation
 
 ## Implementation Notes
 - **Functional Programming**: Use pure functions, immutable state, function composition
