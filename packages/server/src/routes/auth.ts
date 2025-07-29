@@ -1,9 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, Router } from 'express';
 import { User, userHelpers } from '../models/User';
 import { createAuthResponse, authUtils } from '../utils/auth';
 import { AuthenticatedRequest, authenticateToken } from '../middleware/auth';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Registration endpoint
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
@@ -169,6 +169,40 @@ router.get('/user-info', authenticateToken, async (req: AuthenticatedRequest, re
       success: false,
       error: 'Failed to get user info',
       code: 'USER_INFO_ERROR'
+    });
+  }
+});
+
+// Get current user endpoint (me)
+router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        code: 'NOT_AUTHENTICATED'
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: req.user._id.toString(),
+        username: req.user.username,
+        isOnline: req.user.isOnline,
+        currentRoom: req.user.currentRoomId?.toString(),
+        createdAt: req.user.createdAt.toISOString(),
+        lastLogin: (req.user.lastLoginAt || req.user.createdAt).toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get current user',
+      code: 'GET_USER_ERROR'
     });
   }
 });
