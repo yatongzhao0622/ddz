@@ -630,14 +630,19 @@ export class SocketService {
       // For each connected user, send their personalized room list
       for (const [socketId, socket] of this.connectedUsers) {
         try {
-                     const rooms = await Room.findVisibleRooms(socket.userId);
+          if (!socket.userData) {
+            console.log(`⚠️ Socket ${socketId} has no user data, skipping`);
+            continue;
+          }
+
+          const rooms = await Room.findVisibleRooms(socket.userData.userId);
           socket.emit('roomListUpdated', {
             rooms: rooms.map(room => room.toSafeObject())
           });
           
-          console.log(`✅ Sent ${rooms.length} rooms to user ${socket.username} (${socketId})`);
+          console.log(`✅ Sent ${rooms.length} rooms to user ${socket.userData.username} (${socketId})`);
         } catch (error) {
-          console.error(`❌ Failed to send room list to ${socket.username}:`, error);
+          console.error(`❌ Failed to send room list to ${socket.userData?.username || socketId}:`, error);
         }
       }
     } catch (error) {

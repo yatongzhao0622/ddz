@@ -29,6 +29,7 @@ export interface IRoom extends Document {
   checkAllPlayersReady(): boolean;
   canStartGame(): boolean;
   startGame(): Promise<IRoom>;
+  resetAfterGame(): Promise<IRoom>;
   toSafeObject(): any;
 }
 
@@ -194,6 +195,10 @@ RoomSchema.methods.checkAllPlayersReady = function(): boolean {
 };
 
 RoomSchema.methods.canStartGame = function(): boolean {
+  console.log('🎮 Room - canStartGame - Room status:', this.status);
+  console.log('🎮 Room - canStartGame - Players:', this.players);
+  console.log('🎮 Room - canStartGame - Min players:', this.settings.minPlayers);
+  console.log('🎮 Room - canStartGame - All players ready:', this.checkAllPlayersReady());
   return this.status === 'waiting' && 
          this.players.length >= this.settings.minPlayers && 
          this.checkAllPlayersReady();
@@ -205,6 +210,21 @@ RoomSchema.methods.startGame = async function(): Promise<IRoom> {
   }
   
   this.status = 'playing';
+  return await this.save();
+};
+
+RoomSchema.methods.resetAfterGame = async function(): Promise<IRoom> {
+  // Reset room status
+  this.status = 'waiting';
+  
+  // Reset all players' ready status
+  this.players.forEach((player: IRoom['players'][0]) => {
+    player.isReady = false;
+  });
+  
+  // Clear game session reference
+  this.gameSession = undefined;
+  
   return await this.save();
 };
 

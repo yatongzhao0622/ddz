@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { GameState, GamePlayer } from '../../types/game';
+import { GameState, GamePlayer, GamePhase } from '../../types/game';
 import PlayerArea from './PlayerArea';
 import PlayArea from './PlayArea';
 import GameStatus from './GameStatus';
+import GameOverPanel from './GameOverPanel';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -14,6 +15,7 @@ interface GameBoardProps {
   onCardPlay?: () => void;
   onPass?: () => void;
   onBid?: (amount: number) => void;
+  onLeaveGame?: () => void;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -23,7 +25,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onCardSelect,
   onCardPlay,
   onPass,
-  onBid
+  onBid,
+  onLeaveGame
 }) => {
   // Find current user's position and arrange other players
   const currentPlayerIndex = gameState.players.findIndex(p => p.userId === currentUserId);
@@ -116,7 +119,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       </div>
 
       {/* Turn Indicator */}
-      {gameState.currentTurn !== undefined && (
+      {gameState.currentTurn !== undefined && gameState.phase !== GamePhase.FINISHED && (
         <div className="absolute top-4 right-4 z-20">
           <div className="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-semibold animate-pulse">
             {gameState.players[gameState.currentTurn]?.username} 的回合
@@ -146,6 +149,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
             👑 地主: {gameState.players.find(p => p.userId === gameState.landlord)?.username}
           </div>
         </div>
+      )}
+
+      {/* Game Over Panel */}
+      {gameState.phase === GamePhase.FINISHED && gameState.winners && (
+        <GameOverPanel
+          winners={gameState.winners}
+          currentUserId={currentUserId}
+          onLeaveGame={onLeaveGame}
+        />
       )}
     </div>
   );

@@ -307,66 +307,109 @@ export default function RoomPage() {
     }
   }, [roomsState.currentRoom?.id, gameState.currentGame, dispatch]);
 
-    if (isLoading || !isClient) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
-          <LoadingSpinner message="Loading room..." />
-        </div>
-      );
+  // Handle play again
+  const handlePlayAgain = useCallback(async () => {
+    console.log(`🎮 handlePlayAgain - Called`);
+    
+    if (!roomsState.currentRoom?.id) {
+      console.error('🎮 handlePlayAgain - Cannot start new game: no room available');
+      return;
     }
 
-    if (!isAuthenticated) {
-      return null; // Will redirect in useEffect
+    try {
+      console.log(`🎮 handlePlayAgain - Dispatching startGame action...`);
+      
+      const resultAction = await dispatch(startGame(roomsState.currentRoom.id));
+
+      if (startGame.fulfilled.match(resultAction)) {
+        console.log(`✅ New game started successfully:`, resultAction.payload);
+      } else if (startGame.rejected.match(resultAction)) {
+        console.error('🎮 handlePlayAgain - Start game rejected:', resultAction.error);
+      }
+    } catch (error) {
+      console.error('🎮 handlePlayAgain - Exception during start game:', error);
+    }
+  }, [roomsState.currentRoom?.id, dispatch]);
+
+  // Handle leave game
+  const handleLeaveGame = useCallback(async () => {
+    console.log(`🎮 handleLeaveGame - Called`);
+    
+    if (!roomsState.currentRoom?.id) {
+      console.error('🎮 handleLeaveGame - Cannot leave game: no room available');
+      return;
     }
 
-    if (!currentRoom) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
-          <LoadingSpinner message="Loading room..." />
-        </div>
-      );
+    try {
+      console.log(`🎮 handleLeaveGame - Leaving room ${roomsState.currentRoom.id}`);
+      await handleLeaveRoom();
+      router.push('/rooms');
+    } catch (error) {
+      console.error('🎮 handleLeaveGame - Error leaving game:', error);
     }
+  }, [roomsState.currentRoom?.id, handleLeaveRoom, router]);
 
-    const currentPlayerData = currentRoom.players.find(
-      (player: Player) => player.userId === user?.id
-    );
-
+  if (isLoading || !isClient) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
-        <div className="container mx-auto py-8 px-4">
-          {shouldShowGameBoard ? (
-            // Show Game Interface
-            gameState.currentGame ? (
-              <GameBoard
-                gameState={gameState.currentGame}
-                currentUserId={user?.id || ''}
-                selectedCards={gameState.selectedCards}
-                onCardSelect={handleCardSelect}
-                onCardPlay={handleCardPlay}
-                onPass={handlePass}
-                onBid={handleBid}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg">
-                  🎮 Loading game data...
-                </div>
-              </div>
-            )
-          ) : (
-            // Show Room Interface
-            <RoomInterior
-              room={roomsState.currentRoom}
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
+        <LoadingSpinner message="Loading room..." />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect in useEffect
+  }
+
+  if (!currentRoom) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
+        <LoadingSpinner message="Loading room..." />
+      </div>
+    );
+  }
+
+  const currentPlayerData = currentRoom.players.find(
+    (player: Player) => player.userId === user?.id
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      <div className="container mx-auto py-8 px-4">
+        {shouldShowGameBoard ? (
+          // Show Game Interface
+          gameState.currentGame ? (
+            <GameBoard
+              gameState={gameState.currentGame}
               currentUserId={user?.id || ''}
-              onLeaveRoom={handleLeaveRoom}
-              onToggleReady={handleToggleReady}
-              onStartGame={handleStartGame}
-              isLeavingRoom={roomsState.isLeavingRoom}
-              isTogglingReady={roomsState.isTogglingReady}
-              isStartingGame={roomsState.isStartingGame}
+              selectedCards={gameState.selectedCards}
+              onCardSelect={handleCardSelect}
+              onCardPlay={handleCardPlay}
+              onPass={handlePass}
+              onBid={handleBid}
+              onLeaveGame={handleLeaveGame}
             />
-          )}
-        </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg">
+                🎮 Loading game data...
+              </div>
+            </div>
+          )
+        ) : (
+          // Show Room Interface
+          <RoomInterior
+            room={roomsState.currentRoom}
+            currentUserId={user?.id || ''}
+            onLeaveRoom={handleLeaveRoom}
+            onToggleReady={handleToggleReady}
+            onStartGame={handleStartGame}
+            isLeavingRoom={roomsState.isLeavingRoom}
+            isTogglingReady={roomsState.isTogglingReady}
+            isStartingGame={roomsState.isStartingGame}
+          />
+        )}
+      </div>
 
         {/* Action Status Messages */}
         {roomsState.roomActionError && (

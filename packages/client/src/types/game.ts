@@ -45,15 +45,18 @@ export enum PlayerRole {
   LANDLORD = 'landlord'
 }
 
-export interface GamePlayer {
+export interface Player {
   userId: string;
   username: string;
-  position: number; // 0, 1, 2 (position around table)
   role?: PlayerRole;
+  isConnected: boolean;
+}
+
+export interface GamePlayer extends Player {
+  position: number; // 0, 1, 2 (position around table)
   cards: Card[];
   cardCount: number;
   isReady: boolean;
-  isConnected: boolean;
   isTurn: boolean;
   bidAmount?: number;
 }
@@ -78,6 +81,7 @@ export interface GameState {
   startedAt?: Date;
   turnTimeLimit: number; // seconds
   turnStartedAt?: Date;
+  winners?: Player[]; // Array of winning players (could be multiple for farmers)
 }
 
 export interface BidAction {

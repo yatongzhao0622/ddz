@@ -71,6 +71,7 @@ export interface IGame extends Document {
   turnTimeLimit: number;
   turnStartedAt?: Date;
   winner?: mongoose.Types.ObjectId;
+  winners: mongoose.Types.ObjectId[]; // Add winners array
   scores: { [key: string]: number };
   
   // Game Logic Methods
@@ -142,6 +143,7 @@ const GameSchema = new Schema<IGame>({
   turnTimeLimit: { type: Number, default: 30 }, // seconds
   turnStartedAt: { type: Date },
   winner: { type: Schema.Types.ObjectId, ref: 'User' },
+  winners: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Add winners array
   scores: { type: Map, of: Number, default: {} }
 }, {
   timestamps: true
@@ -269,6 +271,19 @@ GameSchema.methods.playCards = async function(userId: string, cards: Card[]): Pr
     this.phase = GamePhase.FINISHED;
     this.winner = currentPlayer.userId;
     this.finishedAt = new Date();
+    
+    // Set winners based on who won
+    const landlord = this.players.find(p => p.role === PlayerRole.LANDLORD);
+    const farmers = this.players.filter(p => p.role === PlayerRole.FARMER);
+    
+    if (landlord && currentPlayer.userId.toString() === landlord.userId.toString()) {
+      // Landlord won
+      this.winners = [landlord.userId];
+    } else {
+      // Farmers won
+      this.winners = farmers.map(farmer => farmer.userId);
+    }
+    
     this.calculateScores();
     this.gameHistory.push(`${currentPlayer.username} 获胜！`);
   } else {
@@ -317,9 +332,11 @@ GameSchema.methods.calculateScores = function(): void {
   if (landlordWins) {
     landlord.score += baseScore * 2; // Landlord gets double
     farmers.forEach(farmer => farmer.score -= baseScore);
+    this.winners = [landlord.userId]; // Set landlord as winner
   } else {
     landlord.score -= baseScore * 2; // Landlord loses double
     farmers.forEach(farmer => farmer.score += baseScore);
+    this.winners = farmers.map(farmer => farmer.userId); // Set farmers as winners
   }
   
   // Update scores map
@@ -355,6 +372,15 @@ GameSchema.methods.toSafeObject = function() {
     turnTimeLimit: this.turnTimeLimit,
     turnStartedAt: this.turnStartedAt,
     winner: this.winner?.toString(),
+    winners: this.winners?.map(winner => {
+      const player = this.players.find(p => p.userId.toString() === winner.toString());
+      return {
+        userId: winner.toString(),
+        username: player?.username || '',
+        role: player?.role || PlayerRole.FARMER,
+        isConnected: player?.isConnected || false
+      };
+    }),
     scores: Object.fromEntries(this.scores || new Map())
   };
 };

@@ -176,6 +176,12 @@ export class GameService {
         cardIds,
         message: `${player?.username} 出牌`
       });
+
+      // If game is finished, update room status
+      if (game.phase === GamePhase.FINISHED) {
+        console.log(`🎮 GameService.playCards - Game finished, updating room status...`);
+        await this.updateRoomAfterGame(roomId);
+      }
     } else {
       console.log(`❌ GameService.playCards - Play failed for ${userId}`);
     }
@@ -238,6 +244,16 @@ export class GameService {
       }
       
       console.log(`✅ GameService - Room found: ${room.roomName}`);
+
+      // Check if room can start game
+      if (!room.canStartGame()) {
+        console.error(`❌ GameService - Room cannot start game: ${room.roomName}`);
+        socket.emit('error', { 
+          message: 'Cannot start game - not all conditions met', 
+          code: 'START_GAME_ERROR' 
+        });
+        return;
+      }
       
       // Create and start game
       console.log(`🎮 GameService - Creating game for room ${roomId}`);
@@ -472,13 +488,28 @@ export class GameService {
     try {
       const room = await Room.findById(roomId);
       if (room) {
-        room.status = 'waiting';
-        room.players.forEach(player => {
-          player.isReady = false;
-        });
-        await room.save();
+        // Reset room state
+        await room.resetAfterGame();
         
+        // Clean up game from memory
+        this.cleanupGame(roomId);
+        
+        // Broadcast room update
         this.broadcastToRoom(roomId, 'roomUpdated', { room: room.toSafeObject() });
+        
+        // Broadcast ready status change for each player
+        room.players.forEach(player => {
+          this.broadcastToRoom(roomId, 'playerReadyChanged', {
+            room: room.toSafeObject(),
+            player: {
+              userId: player.userId.toString(),
+              username: player.username
+            },
+            isReady: false
+          });
+        });
+
+        console.log(`✅ GameService - Room ${roomId} reset and game cleaned up`);
       }
     } catch (error) {
       console.error('Error updating room after game:', error);
