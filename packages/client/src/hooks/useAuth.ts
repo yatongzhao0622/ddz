@@ -3,26 +3,26 @@ import { useEffect, useRef } from 'react';
 import { RootState, AppDispatch } from '../store';
 import { loginUser, registerUser, logoutUser, checkAuthStatus, clearError } from '../store/slices/authSlice';
 
-// Global singleton to prevent duplicate auth checks across ALL hook instances
-let globalAuthInitialized = false;
+// Global flag to prevent excessive concurrent auth checks
 let globalAuthInProgress = false;
 
 export const useAuth = () => {
   const dispatch = useDispatch<AppDispatch>();
   const authState = useSelector((state: RootState) => state.auth);
   const mountedRef = useRef(false);
+  const authCheckStartedRef = useRef(false);
 
-  // Initialize auth status ONLY ONCE GLOBALLY
+  // Initialize auth status on mount - allow re-checking on page refresh
   useEffect(() => {
     mountedRef.current = true;
 
-    // GLOBAL check - prevent ANY duplicate auth initialization
-    if (globalAuthInitialized) {
-      console.log('🔍 useAuth - Global auth already initialized, skipping');
+    // Prevent duplicate auth checks within this specific hook instance
+    if (authCheckStartedRef.current) {
+      console.log('🔍 useAuth - Auth check already started in this hook instance');
       return;
     }
 
-    // GLOBAL check - prevent concurrent auth checks
+    // Prevent excessive concurrent global auth checks
     if (globalAuthInProgress) {
       console.log('🔍 useAuth - Global auth check in progress, skipping');
       return;
@@ -30,31 +30,28 @@ export const useAuth = () => {
 
     // Don't run auth check if we're already authenticated with a user
     if (authState.isAuthenticated && authState.user) {
-      console.log('🔍 useAuth - Already authenticated with user, skipping auth check');
-      globalAuthInitialized = true;
+      console.log('🔍 useAuth - Already authenticated with user:', authState.user.username);
       return;
     }
 
     // Only check auth if we have a token and we're on the client
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
-      if (token) {
-        console.log('🔍 useAuth - Starting GLOBAL auth check (ONCE)');
+      if (token && !authState.isLoading) {
+        console.log('🔍 useAuth - Starting auth check on page load/refresh');
+        authCheckStartedRef.current = true;
         globalAuthInProgress = true;
-        globalAuthInitialized = true;
         
         // Dispatch auth check and handle completion
-        const authPromise = dispatch(checkAuthStatus());
-        authPromise.then(() => {
-          console.log('🔍 useAuth - Global auth check completed');
+        dispatch(checkAuthStatus()).unwrap().then(() => {
+          console.log('🔍 useAuth - Auth check completed successfully');
           globalAuthInProgress = false;
-        }).catch(() => {
-          console.log('🔍 useAuth - Global auth check failed');
+        }).catch((error: any) => {
+          console.error('🔍 useAuth - Auth check failed:', error);
           globalAuthInProgress = false;
         });
-      } else {
-        console.log('🔍 useAuth - No token found, marking as initialized');
-        globalAuthInitialized = true;
+      } else if (!token) {
+        console.log('🔍 useAuth - No token found, user not authenticated');
       }
     }
     
@@ -83,7 +80,6 @@ export const useAuth = () => {
 
   const logout = () => {
     console.log('🔍 useAuth - Logging out, resetting global flags');
-    globalAuthInitialized = false;
     globalAuthInProgress = false;
     dispatch(logoutUser());
   };

@@ -65,6 +65,7 @@ export interface ServerToClientEvents {
   playerLeft: (data: PlayerEventData) => void;
   playerReadyChanged: (data: PlayerReadyEventData) => void;
   gameStarted: (data: RoomEventData) => void;
+  roomLeft: (data: { roomId: string; message: string }) => void;
   error: (data: ErrorEventData) => void;
 }
 

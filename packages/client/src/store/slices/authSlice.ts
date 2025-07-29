@@ -123,26 +123,16 @@ export const checkAuthStatus = createAsyncThunk(
         return rejectWithValue('No token found');
       }
 
-      // Validate token format before sending
+      // Simple token validation - just check if it exists and trim whitespace
       const cleanToken = token.trim();
       
-      // Basic token validation - check if it looks like base64
-      if (!cleanToken || !/^[A-Za-z0-9+/]+=*$/.test(cleanToken)) {
-        console.warn('Invalid token format detected, clearing localStorage');
+      if (!cleanToken) {
+        console.warn('Empty token detected, clearing localStorage');
         localStorage.removeItem('token');
-        return rejectWithValue('Invalid token format');
+        return rejectWithValue('Empty token');
       }
 
-      // Test decode the token before sending to server
-      try {
-        const decoded = atob(cleanToken);
-        JSON.parse(decoded); // Validate it's proper JSON
-      } catch (decodeError) {
-        console.warn('Token decode failed, clearing localStorage:', decodeError);
-        localStorage.removeItem('token');
-        return rejectWithValue('Token decode failed');
-      }
-
+      console.log('🔍 checkAuthStatus - Validating token with server');
       const response = await fetch('http://localhost:3001/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${cleanToken}`,
@@ -150,23 +140,27 @@ export const checkAuthStatus = createAsyncThunk(
       });
 
       if (!response.ok) {
-        // Clear invalid token on any auth failure
-        localStorage.removeItem('token');
+        console.warn('🔍 checkAuthStatus - Server rejected token, status:', response.status);
         
+        // Only clear token on 401 (unauthorized) - let other errors persist the token
         if (response.status === 401) {
+          console.warn('🔍 checkAuthStatus - Token expired/invalid, clearing localStorage');
+          localStorage.removeItem('token');
           return rejectWithValue('Token expired or invalid');
         }
         
+        // For other errors (500, network issues), keep the token
         const errorData = await response.json().catch(() => ({ message: 'Authentication failed' }));
         return rejectWithValue(errorData.message || 'Authentication failed');
       }
 
+      console.log('🔍 checkAuthStatus - Token validated successfully');
       const data = await response.json();
       return { user: data.user, token: cleanToken };
     } catch (error) {
-      console.error('Auth check failed:', error);
-      localStorage.removeItem('token');
-      return rejectWithValue('Network error');
+      console.error('🔍 checkAuthStatus - Network error:', error);
+      // Don't clear token on network errors - keep it for retry
+      return rejectWithValue('Network error - token preserved');
     }
   }
 );

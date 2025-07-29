@@ -311,10 +311,11 @@ export default function Home() {
                   {socket.rooms.isLoadingRooms ? '🔄 Loading...' : '🔄 Refresh Rooms'}
                 </button>
                 <button 
+                  onClick={() => router.push('/rooms')}
                   disabled={!socket.isAuthenticated}
                   className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  ➕ Create Room
+                  🏠 Browse Rooms
                 </button>
                 <button 
                   disabled={!socket.isAuthenticated}

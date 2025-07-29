@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Room } from '../models/Room';
 import { User } from '../models/User';
 import { verifyToken, TokenPayload } from '../utils/auth';
+import mongoose from 'mongoose';
 
 // Socket.IO Event Types
 export interface ClientToServerEvents {
@@ -174,9 +175,69 @@ export class SocketService {
 
   private async handleJoinRoom(socket: AuthenticatedSocket, roomId: string): Promise<void> {
     try {
+      console.log(`🔍 handleJoinRoom - Attempting to join room: ${roomId}`);
+      console.log(`🔍 handleJoinRoom - Room ID type: ${typeof roomId}, length: ${roomId.length}`);
+      
+      // Validate ObjectId format
+      if (!mongoose.Types.ObjectId.isValid(roomId)) {
+        console.log(`❌ handleJoinRoom - Invalid ObjectId format: ${roomId}`);
+        socket.emit('error', { message: 'Invalid room ID format', code: 'INVALID_ROOM_ID' });
+        return;
+      }
+      
       const room = await Room.findById(roomId);
       if (!room) {
+        console.log(`❌ handleJoinRoom - Room not found for ID: ${roomId}`);
+        
+        // List all rooms for debugging
+        const allRooms = await Room.find({}).select('_id roomName');
+        console.log(`🔍 handleJoinRoom - Available rooms:`, allRooms.map(r => ({ id: r._id.toString(), name: r.roomName })));
+        
         socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
+        return;
+      }
+
+      console.log(`✅ handleJoinRoom - Found room: ${room.roomName} (${room._id})`);
+
+      // Check if player can join room
+      if (room.status !== 'waiting') {
+        console.log(`❌ handleJoinRoom - Room is not in waiting status: ${room.status}`);
+        socket.emit('error', { message: 'Room is not accepting new players', code: 'ROOM_NOT_WAITING' });
+        return;
+      }
+
+      if (room.players.length >= room.maxPlayers) {
+        console.log(`❌ handleJoinRoom - Room is full: ${room.players.length}/${room.maxPlayers}`);
+        socket.emit('error', { message: 'Room is full', code: 'ROOM_FULL' });
+        return;
+      }
+
+      // Check if player is already in room
+      const existingPlayer = room.players.find(p => p.userId.toString() === socket.userData!.userId);
+      if (existingPlayer) {
+        console.log(`✅ handleJoinRoom - Player already in room, updating connection`);
+        // Player already in room, just join the socket room
+        socket.join(`room_${roomId}`);
+        socket.userData!.roomId = roomId;
+        
+        // Send current room state to the player who just connected
+        socket.emit('roomUpdated', {
+          room: room.toSafeObject()
+        });
+        
+        // Also broadcast that the player reconnected (to update connection status)
+        this.io.to(`room_${roomId}`).emit('playerJoined', {
+          room: room.toSafeObject(),
+          player: {
+            userId: socket.userData!.userId,
+            username: socket.userData!.username,
+            isReady: existingPlayer.isReady,
+            isConnected: true
+          }
+        });
+        
+        // Update room list for all clients
+        this.broadcastRoomList();
         return;
       }
 
@@ -185,6 +246,8 @@ export class SocketService {
         socket.userData!.userId as any,
         socket.userData!.username
       );
+
+      console.log(`✅ handleJoinRoom - Player ${socket.userData!.username} added to room`);
 
       // Update user's current room
       const user = await User.findById(socket.userData!.userId);
@@ -213,7 +276,7 @@ export class SocketService {
       this.broadcastRoomList();
 
     } catch (error) {
-      console.error('Join room error:', error);
+      console.error('❌ handleJoinRoom error:', error);
       socket.emit('error', { 
         message: error instanceof Error ? error.message : 'Failed to join room', 
         code: 'JOIN_ROOM_ERROR' 
@@ -223,30 +286,48 @@ export class SocketService {
 
   private async handleLeaveRoom(socket: AuthenticatedSocket, roomId: string): Promise<void> {
     try {
+      console.log(`🔍 handleLeaveRoom - User ${socket.userData!.username} leaving room ${roomId}`);
+      
       const room = await Room.findById(roomId);
       if (!room) {
+        console.log(`❌ handleLeaveRoom - Room not found: ${roomId}`);
         socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
         return;
       }
 
+      console.log(`🔍 handleLeaveRoom - Room found: ${room.roomName}, current players: ${room.players.length}`);
+      console.log(`🔍 handleLeaveRoom - Players before removal:`, room.players.map(p => ({ userId: p.userId.toString(), username: p.username })));
+
       // Remove player from room
       const updatedRoom = await room.removePlayer(socket.userData!.userId as any);
+      console.log(`✅ handleLeaveRoom - Player removed, remaining players: ${updatedRoom.players.length}`);
+      console.log(`🔍 handleLeaveRoom - Players after removal:`, updatedRoom.players.map(p => ({ userId: p.userId.toString(), username: p.username })));
 
       // Update user's current room
       const user = await User.findById(socket.userData!.userId);
       if (user) {
         await user.leaveRoom();
+        console.log(`✅ handleLeaveRoom - User ${socket.userData!.username} room status updated`);
       }
 
       // Leave socket room
       socket.leave(`room_${roomId}`);
       socket.userData!.roomId = undefined;
+      console.log(`✅ handleLeaveRoom - Socket left room ${roomId}`);
 
-      // Broadcast to room
+      // Notify the leaving player immediately
+      socket.emit('roomLeft', {
+        roomId: roomId,
+        message: 'Successfully left room'
+      });
+
+      // Broadcast to remaining players in room
+      console.log(`🔍 handleLeaveRoom - Broadcasting roomUpdated to room_${roomId}`);
       this.io.to(`room_${roomId}`).emit('roomUpdated', {
         room: updatedRoom.toSafeObject()
       });
 
+      console.log(`🔍 handleLeaveRoom - Broadcasting playerLeft to room_${roomId}`);
       this.io.to(`room_${roomId}`).emit('playerLeft', {
         room: updatedRoom.toSafeObject(),
         player: {
@@ -256,10 +337,13 @@ export class SocketService {
       });
 
       // Update room list for all clients
+      console.log(`🔍 handleLeaveRoom - Broadcasting updated room list`);
       this.broadcastRoomList();
 
+      console.log(`🎉 handleLeaveRoom - Successfully processed leave room for ${socket.userData!.username}`);
+
     } catch (error) {
-      console.error('Leave room error:', error);
+      console.error('❌ Leave room error:', error);
       socket.emit('error', { 
         message: error instanceof Error ? error.message : 'Failed to leave room', 
         code: 'LEAVE_ROOM_ERROR' 
@@ -366,15 +450,24 @@ export class SocketService {
       // Remove from connected users
       this.connectedUsers.delete(socket.userData.userId);
 
-      // Update user offline status
-      try {
-        const user = await User.findById(socket.userData.userId);
-        if (user) {
-          await user.updateLoginStatus(false);
+      // Update user offline status with a delay to handle quick reconnections (page refresh)
+      const userData = socket.userData; // Capture userData before timeout
+      setTimeout(async () => {
+        try {
+          // Check if user reconnected in the meantime
+          if (!this.connectedUsers.has(userData.userId)) {
+            const user = await User.findById(userData.userId);
+            if (user) {
+              await user.updateLoginStatus(false);
+              console.log(`🔌 User marked offline after timeout: ${userData.username}`);
+            }
+          } else {
+            console.log(`🔌 User reconnected, not marking offline: ${userData.username}`);
+          }
+        } catch (error) {
+          console.error('Error updating user offline status:', error);
         }
-      } catch (error) {
-        console.error('Error updating user offline status:', error);
-      }
+      }, 5000); // 5 second delay to handle page refreshes
 
       console.log(`👋 User disconnected: ${socket.userData.username} (${socket.id})`);
     }

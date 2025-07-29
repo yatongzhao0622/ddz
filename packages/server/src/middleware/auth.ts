@@ -51,15 +51,9 @@ export const authenticateToken = async (
       return;
     }
 
-    // Check if user is still online/active
-    if (!user.isOnline) {
-      res.status(401).json({
-        success: false,
-        error: 'User session expired',
-        code: 'SESSION_EXPIRED'
-      });
-      return;
-    }
+    // Note: Removed isOnline check for HTTP API calls
+    // HTTP is stateless - users can be "offline" from Socket.IO but still have valid tokens
+    // The token expiration check above is sufficient for HTTP API authentication
 
     // Attach user and payload to request
     req.user = user;

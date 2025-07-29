@@ -21,4 +21,7 @@ export const store: EnhancedStore = configureStore({
 });
 
 export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch; 
+export type AppDispatch = typeof store.dispatch;
+
+// Export the store type for proper async thunk typing
+export type AppStore = typeof store; 

@@ -209,21 +209,22 @@ RoomSchema.methods.startGame = async function(): Promise<IRoom> {
 
 RoomSchema.methods.toSafeObject = function() {
   return {
-    _id: this._id,
-    roomName: this.roomName,
+    id: this._id.toString(),
+    name: this.roomName,
     maxPlayers: this.maxPlayers,
+    currentPlayerCount: this.players.length,
     players: this.players.map((player: IRoom['players'][0]) => ({
-      userId: player.userId,
+      userId: player.userId.toString(),
       username: player.username,
       isReady: player.isReady,
+      isConnected: true, // Assume connected for API data
       joinedAt: player.joinedAt
     })),
     status: this.status,
-    createdBy: this.createdBy,
+    createdBy: this.createdBy.toString(),
     createdAt: this.createdAt,
-    settings: this.settings,
-    playerCount: this.players.length,
-    canStart: this.canStartGame()
+    isPrivate: this.settings.isPrivate,
+    settings: this.settings
   };
 };
 

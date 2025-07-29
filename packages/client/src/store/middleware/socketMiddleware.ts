@@ -2,12 +2,13 @@ import { Middleware } from '@reduxjs/toolkit';
 import { RootState, AppDispatch } from '../index';
 import { updateConnectionState, setSocketError } from '../slices/socketSlice';
 import { 
-  updateRoomList, 
-  updateCurrentRoom, 
-  playerJoined, 
-  playerLeft, 
+    updateRoomList,
+  updateCurrentRoom,
+  playerJoined,
+  playerLeft,
   playerReadyChanged,
-  gameStarted 
+  gameStarted,
+  clearCurrentRoom 
 } from '../slices/roomsSlice';
 
 // Socket middleware to sync Socket.IO events with Redux state
@@ -47,47 +48,78 @@ function initializeSocketEventListeners(dispatch: AppDispatch): void {
 
     // Connection state updates
     socketService.on('stateChange', (socketState) => {
-      dispatch(updateConnectionState(socketState));
+      dispatch(updateConnectionState(socketState as any));
     });
 
     // Socket errors
     socketService.on('error', (data) => {
-      dispatch(setSocketError(data.message));
+      dispatch(setSocketError((data as any).message));
       console.error('🔧 SocketMiddleware - Socket error:', data);
     });
 
     // Room list updates
     socketService.on('roomListUpdated', (data) => {
-      console.log('🔧 SocketMiddleware - Room list updated:', data.rooms?.length, 'rooms');
-      dispatch(updateRoomList(data.rooms));
+      console.log('🔧 SocketMiddleware - Room list updated:', (data as any).rooms?.length, 'rooms');
+      dispatch(updateRoomList((data as any).rooms));
     });
 
-    // Room updates
+    // Room updates - CRITICAL: This should set the current room
     socketService.on('roomUpdated', (data) => {
-      console.log('🔧 SocketMiddleware - Room updated:', data.room?.id);
-      dispatch(updateCurrentRoom(data.room));
+      const roomData = (data as any).room;
+      console.log('🔧 SocketMiddleware - Room updated:', roomData?.id);
+      console.log('🔧 SocketMiddleware - Room data:', data);
+      console.log('🔧 SocketMiddleware - Setting as current room');
+      dispatch(updateCurrentRoom(roomData));
     });
 
-    // Player events
-    socketService.on('playerJoined', (data) => {
-      console.log('🔧 SocketMiddleware - Player joined:', data.player?.username);
-      dispatch(playerJoined(data));
-    });
+          // Player events
+      socketService.on('playerJoined', (data) => {
+        const eventData = data as any;
+        console.log('🔧 SocketMiddleware - Player joined:', eventData.player?.username);
+        console.log('🔧 SocketMiddleware - Player joined room data:', eventData.room);
+        dispatch(playerJoined(eventData));
+        // Also update current room if this affects current user
+        if (eventData.room) {
+          dispatch(updateCurrentRoom(eventData.room));
+        }
+      });
 
-    socketService.on('playerLeft', (data) => {
-      console.log('🔧 SocketMiddleware - Player left:', data.player?.username);
-      dispatch(playerLeft(data));
-    });
+      socketService.on('playerLeft', (data) => {
+        const eventData = data as any;
+        console.log('🔧 SocketMiddleware - Player left:', eventData.player?.username);
+        console.log('🔧 SocketMiddleware - Updated room after player left:', eventData.room);
+        console.log('🔧 SocketMiddleware - Room players after leave:', eventData.room?.players);
+        dispatch(playerLeft(eventData));
+        // Update current room
+        if (eventData.room) {
+          console.log('🔧 SocketMiddleware - Updating current room after player left');
+          dispatch(updateCurrentRoom(eventData.room));
+        }
+      });
+
+      // Handle room left event for the leaving player
+      socketService.on('roomLeft', (data) => {
+        const eventData = data as any;
+        console.log('🔧 SocketMiddleware - User left room:', eventData);
+        // Clear current room for the leaving player
+        dispatch(clearCurrentRoom());
+      });
 
     socketService.on('playerReadyChanged', (data) => {
-      console.log('🔧 SocketMiddleware - Player ready changed:', data.player?.username, data.isReady);
-      dispatch(playerReadyChanged(data));
+      const eventData = data as any;
+      console.log('🔧 SocketMiddleware - Player ready changed:', eventData.player?.username, eventData.isReady);
+      dispatch(playerReadyChanged(eventData));
+      // Update current room
+      if (eventData.room) {
+        dispatch(updateCurrentRoom(eventData.room));
+      }
     });
 
     // Game events
     socketService.on('gameStarted', (data) => {
-      console.log('🔧 SocketMiddleware - Game started:', data.room?.id);
-      dispatch(gameStarted(data));
+      const eventData = data as any;
+      console.log('🔧 SocketMiddleware - Game started:', eventData.room?.id);
+      dispatch(gameStarted(eventData));
     });
 
     listenersInitialized = true;
