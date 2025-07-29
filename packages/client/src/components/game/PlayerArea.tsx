@@ -1,8 +1,27 @@
 'use client';
 
 import React from 'react';
-import { GamePlayer, GamePhase, Card as CardType } from '../../types/game';
+import { GamePlayer, GamePhase, Card as CardType, CardRank } from '../../types/game';
 import Card from './Card';
+
+// Card sorting utility for Dou Dizhu
+const sortCards = (cards: CardType[]): CardType[] => {
+  return [...cards].sort((a, b) => {
+    // First sort by value (lowest to highest)
+    if (a.value !== b.value) {
+      return a.value - b.value;
+    }
+    
+    // If same value, sort by suit (for same rank cards)
+    if (a.suit && b.suit) {
+      const suitOrder = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
+      return suitOrder[a.suit] - suitOrder[b.suit];
+    }
+    
+    // Jokers come last and are already sorted by value
+    return 0;
+  });
+};
 
 interface PlayerAreaProps {
   player: GamePlayer;
@@ -87,10 +106,12 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
           </div>
         )}
         {isCurrentTurn && (
-          <div className={`absolute ${
-            position === 'bottom' ? '-bottom-2' : '-bottom-1'
-          } left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black text-xs px-2 py-1 rounded-full font-bold`}>
-            出牌
+          <div className={`absolute
+            ${position === 'bottom' ? 'top-5' : '-top-12'}
+            ${position === 'bottom' ? 'left-30' : 'left-1/2'} transform -translate-x-1/2
+            flex items-center justify-center rounded-sm
+            bg-yellow-400 text-black text-xs px-1 w-14 py-1 font-bold`}>
+            {gamePhase === 'bidding' ? '叫地主' : '出牌'}
           </div>
         )}
       </div>
@@ -108,6 +129,9 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
   };
 
   if (showCards && player.cards) {
+    // Sort cards for current player
+    const sortedCards = isCurrentPlayer ? sortCards(player.cards) : player.cards;
+    
     return (
       <div className="flex flex-col items-center space-y-3">
         <div className={getPlayerInfoClasses()}>
@@ -117,17 +141,17 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
           </span>
         </div>
         <div className={getCardContainerClasses()}>
-          {player.cards.map((card, index) => {
+          {sortedCards.map((card, index) => {
             const isSelected = selectedCards?.includes(card.id);
             let cardStyle: React.CSSProperties = {};
             
             if (position === 'bottom') {
               // Fan layout for bottom player
-              const totalCards = player.cards.length;
+              const totalCards = sortedCards.length;
               const centerIndex = (totalCards - 1) / 2;
               const offsetFromCenter = index - centerIndex;
-              const rotationAngle = offsetFromCenter * 3; // 3 degrees per card
-              const translateY = Math.abs(offsetFromCenter) * 2; // Slight curve
+              const rotationAngle = offsetFromCenter * 0.5; // 3 degrees per card
+              const translateY = Math.abs(offsetFromCenter) * 1; // Slight curve
               
               cardStyle = {
                 transform: `rotate(${rotationAngle}deg) translateY(${translateY}px) ${
@@ -140,7 +164,7 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
               // Horizontal stacked layout for side players
               cardStyle = {
                 marginLeft: index === 0 ? '0' : '-6px',
-                zIndex: player.cards.length - index
+                zIndex: sortedCards.length - index
               };
             }
             

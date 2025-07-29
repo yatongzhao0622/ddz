@@ -117,40 +117,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
         </div>
       </div>
 
-      {/* Turn Indicator */}
-      {gameState.currentTurn !== undefined && gameState.phase !== GamePhase.FINISHED && (
-        <div className="absolute top-8 right-8 z-30">
-          <div className="bg-yellow-500 text-black px-4 py-2 rounded-xl text-sm font-bold animate-pulse shadow-lg">
-            {gameState.players[gameState.currentTurn]?.username} 的回合
-          </div>
-        </div>
-      )}
-
-      {/* Game Phase Indicator */}
-      <div className="absolute top-8 left-8 z-30">
-        <div className={`px-4 py-2 rounded-xl text-sm font-bold shadow-lg ${
-          gameState.phase === 'bidding' ? 'bg-orange-500 text-white' :
-          gameState.phase === 'playing' ? 'bg-blue-500 text-white' :
-          gameState.phase === 'finished' ? 'bg-red-500 text-white' :
-          'bg-gray-500 text-white'
-        }`}>
-          {gameState.phase === 'bidding' ? '叫地主' :
-           gameState.phase === 'playing' ? '游戏中' :
-           gameState.phase === 'finished' ? '游戏结束' :
-           '等待中'}
-        </div>
-      </div>
-
-      {/* Landlord Indicator */}
-      {gameState.landlord && (
-        <div className="absolute top-20 left-8 z-30">
-          <div className="bg-yellow-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2">
-            <span className="text-lg">👑</span>
-            <span>地主: {gameState.players.find(p => p.userId === gameState.landlord)?.username}</span>
-          </div>
-        </div>
-      )}
-
       {/* Game Over Panel */}
       {gameState.phase === GamePhase.FINISHED && gameState.winners && (
         <GameOverPanel
