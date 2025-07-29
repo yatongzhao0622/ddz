@@ -5,6 +5,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectMongoDB, connectRedis, checkDatabaseHealth, createMockDatabaseWarning } from './config/database';
 import authRoutes from './routes/auth';
+import roomRoutes from './routes/rooms';
+import { SocketService } from './services/socketService';
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +23,9 @@ const io = new Server(httpServer, {
 
 // Initialize Redis connection (may be null in dev mode)
 const redis = connectRedis();
+
+// Initialize Socket.IO service
+const socketService = new SocketService(io);
 
 // Middleware
 app.use(cors({
@@ -39,6 +44,7 @@ app.get('/health', async (req: Request, res: Response) => {
     message: 'Dou Dizhu Server is running',
     timestamp: new Date().toISOString(),
     databases: health,
+    connectedUsers: socketService.getConnectedUsersCount(),
     mode: process.env.NODE_ENV || 'development'
   });
 });
@@ -52,51 +58,39 @@ app.get('/api/status', (req: Request, res: Response) => {
     features: {
       authentication: true,
       realtime: true,
+      rooms: true,
+      socketio: true,
       mongodb: !!redis,
       redis: !!redis
-    }
+    },
+    connectedUsers: socketService.getConnectedUsersCount()
   });
 });
 
-// Authentication routes
+// API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/rooms', roomRoutes);
 
 // Development endpoint for testing
 app.get('/api/test', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'API is working',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    realtime: {
+      connectedUsers: socketService.getConnectedUsersCount()
+    }
   });
 });
 
-// Socket.IO connection handling
-io.on('connection', (socket: Socket) => {
-  console.log(`Client connected: ${socket.id}`);
-
-  socket.emit('welcome', { 
-    message: 'Connected to Dou Dizhu server',
-    socketId: socket.id,
-    features: {
-      authentication: true,
-      realtime: true
+// Socket.IO stats endpoint
+app.get('/api/socket/stats', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      connectedUsers: socketService.getConnectedUsersCount(),
+      timestamp: new Date().toISOString()
     }
-  });
-
-  // Handle user authentication via Socket.IO
-  socket.on('authenticate', async (data: { token?: string }) => {
-    try {
-      // TODO: Implement socket authentication
-      console.log('Socket authentication request:', data);
-      socket.emit('authenticated', { success: true });
-    } catch (error) {
-      console.error('Socket authentication error:', error);
-      socket.emit('authentication_error', { error: 'Authentication failed' });
-    }
-  });
-
-  socket.on('disconnect', (reason: string) => {
-    console.log(`Client disconnected: ${socket.id}, reason: ${reason}`);
   });
 });
 
@@ -134,12 +128,14 @@ const startServer = async () => {
     // Start HTTP server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Dou Dizhu server running on port ${PORT}`);
-      console.log(`📡 Socket.IO server ready for connections`);
+      console.log(`📡 Socket.IO server ready for real-time events`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🗄️ MongoDB: ${mongoConnected ? 'Connected' : 'Disconnected (dev mode)'}`);
       console.log(`📦 Redis: ${redis ? 'Connected' : 'Disconnected (dev mode)'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth/*`);
+      console.log(`🏠 Room API: http://localhost:${PORT}/api/rooms/*`);
+      console.log(`⚡ Socket.IO: Real-time room management active`);
     });
     
   } catch (error) {
