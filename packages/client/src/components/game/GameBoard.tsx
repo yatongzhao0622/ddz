@@ -35,57 +35,52 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Arrange players: current player at bottom, others clockwise
   const getPlayerArrangement = (): {
     bottom: GamePlayer;
-    left: GamePlayer;
     right: GamePlayer;
+    left: GamePlayer;
   } => {
     const players = gameState.players;
     
     return {
       bottom: players[currentPlayerIndex], // Current player
-      left: players[(currentPlayerIndex + 1) % 3], // Next player clockwise
-      right: players[(currentPlayerIndex + 2) % 3] // Player after that
+      right: players[(currentPlayerIndex + 1) % 3], // Next player clockwise (right side)
+      left: players[(currentPlayerIndex + 2) % 3] // Third player (left side)
     };
   };
 
   const playerArrangement = getPlayerArrangement();
 
   return (
-    <div className="h-screen w-full bg-gradient-to-br from-green-800 via-green-600 to-green-800 relative overflow-hidden">
+    <div className="h-screen w-full relative overflow-hidden bg-gradient-to-br from-green-900 via-green-800 to-green-900">
+      {/* Felt texture overlay */}
+      <div className="absolute inset-0 opacity-20" style={{
+        backgroundImage: `radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0)`,
+        backgroundSize: '20px 20px'
+      }}></div>
+      
       {/* Game Status Bar */}
-      <div className="absolute top-0 left-0 right-0 z-10">
+      <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/40 to-transparent p-4">
         <GameStatus 
           gameState={gameState}
           currentUserId={currentUserId}
         />
       </div>
 
-      {/* Top Player (Opposite) */}
-      <div className="absolute top-16 left-1/2 transform -translate-x-1/2">
-        <PlayerArea
-          player={playerArrangement.left}
-          position="top"
-          isCurrentPlayer={false}
-          isCurrentTurn={gameState.currentTurn === playerArrangement.left.position}
-          gamePhase={gameState.phase}
-        />
-      </div>
-
-      {/* Left Player */}
-      <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+      {/* Right Player */}
+      <div className="absolute top-1/2 right-8 transform -translate-y-1/2 z-20">
         <PlayerArea
           player={playerArrangement.right}
-          position="left"
+          position="right"
           isCurrentPlayer={false}
           isCurrentTurn={gameState.currentTurn === playerArrangement.right.position}
           gamePhase={gameState.phase}
         />
       </div>
 
-      {/* Right Player */}
-      <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+      {/* Left Player */}
+      <div className="absolute top-1/2 left-8 transform -translate-y-1/2 z-20">
         <PlayerArea
           player={playerArrangement.left}
-          position="right"
+          position="left"
           isCurrentPlayer={false}
           isCurrentTurn={gameState.currentTurn === playerArrangement.left.position}
           gamePhase={gameState.phase}
@@ -93,43 +88,47 @@ const GameBoard: React.FC<GameBoardProps> = ({
       </div>
 
       {/* Central Play Area */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <PlayArea
-          gameState={gameState}
-          currentPlayer={currentPlayer}
-          selectedCards={selectedCards}
-          onCardPlay={onCardPlay}
-          onPass={onPass}
-          onBid={onBid}
-        />
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+        <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-8 shadow-2xl border border-white/10">
+          <PlayArea
+            gameState={gameState}
+            currentPlayer={currentPlayer}
+            selectedCards={selectedCards}
+            onCardPlay={onCardPlay}
+            onPass={onPass}
+            onBid={onBid}
+          />
+        </div>
       </div>
 
       {/* Current Player Area (Bottom) */}
-      <div className="absolute bottom-0 left-0 right-0">
-        <PlayerArea
-          player={playerArrangement.bottom}
-          position="bottom"
-          isCurrentPlayer={true}
-          isCurrentTurn={gameState.currentTurn === playerArrangement.bottom.position}
-          gamePhase={gameState.phase}
-          onCardSelect={onCardSelect}
-          selectedCards={selectedCards}
-          showCards={true}
-        />
+      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20">
+        <div className="bg-gradient-to-t from-black/40 to-transparent pt-8 pb-4 px-8 rounded-t-2xl">
+          <PlayerArea
+            player={playerArrangement.bottom}
+            position="bottom"
+            isCurrentPlayer={true}
+            isCurrentTurn={gameState.currentTurn === playerArrangement.bottom.position}
+            gamePhase={gameState.phase}
+            onCardSelect={onCardSelect}
+            selectedCards={selectedCards}
+            showCards={true}
+          />
+        </div>
       </div>
 
       {/* Turn Indicator */}
       {gameState.currentTurn !== undefined && gameState.phase !== GamePhase.FINISHED && (
-        <div className="absolute top-4 right-4 z-20">
-          <div className="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-semibold animate-pulse">
+        <div className="absolute top-8 right-8 z-30">
+          <div className="bg-yellow-500 text-black px-4 py-2 rounded-xl text-sm font-bold animate-pulse shadow-lg">
             {gameState.players[gameState.currentTurn]?.username} 的回合
           </div>
         </div>
       )}
 
       {/* Game Phase Indicator */}
-      <div className="absolute top-4 left-4 z-20">
-        <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
+      <div className="absolute top-8 left-8 z-30">
+        <div className={`px-4 py-2 rounded-xl text-sm font-bold shadow-lg ${
           gameState.phase === 'bidding' ? 'bg-orange-500 text-white' :
           gameState.phase === 'playing' ? 'bg-blue-500 text-white' :
           gameState.phase === 'finished' ? 'bg-red-500 text-white' :
@@ -144,9 +143,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
       {/* Landlord Indicator */}
       {gameState.landlord && (
-        <div className="absolute top-12 left-4 z-20">
-          <div className="bg-yellow-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-            👑 地主: {gameState.players.find(p => p.userId === gameState.landlord)?.username}
+        <div className="absolute top-20 left-8 z-30">
+          <div className="bg-yellow-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2">
+            <span className="text-lg">👑</span>
+            <span>地主: {gameState.players.find(p => p.userId === gameState.landlord)?.username}</span>
           </div>
         </div>
       )}

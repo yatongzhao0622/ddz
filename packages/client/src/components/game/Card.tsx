@@ -10,6 +10,7 @@ interface CardProps {
   size?: 'small' | 'medium' | 'large';
   onClick?: (card: CardType) => void;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 const Card: React.FC<CardProps> = ({
@@ -18,7 +19,8 @@ const Card: React.FC<CardProps> = ({
   isDisabled = false,
   size = 'medium',
   onClick,
-  className = ''
+  className = '',
+  style = {}
 }) => {
   const getSuitSymbol = (suit?: CardSuit): string => {
     if (!suit) return ''; // Jokers don't have suits
@@ -64,10 +66,10 @@ const Card: React.FC<CardProps> = ({
       case 'small':
         return 'w-8 h-12 text-xs';
       case 'large':
-        return 'w-16 h-24 text-lg';
+        return 'w-24 h-36 text-lg';
       case 'medium':
       default:
-        return 'w-12 h-18 text-sm';
+        return 'w-18 h-27 text-sm';
     }
   };
 
@@ -113,6 +115,7 @@ const Card: React.FC<CardProps> = ({
       `}
       onClick={handleClick}
       title={`${getRankDisplay(card.rank)}${card.suit ? getSuitSymbol(card.suit) : ''}`}
+      style={style}
     >
       {/* Top-left corner */}
       <div className={`absolute top-1 left-1 flex flex-col items-center leading-none ${isSelected ? 'text-blue-800 font-extrabold' : ''}`}>

@@ -42,137 +42,153 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
   };
 
   const getCardContainerClasses = () => {
-    const baseClasses = "flex";
-    
     switch (position) {
-      case 'top':
-        return `${baseClasses} flex-row space-x-1`;
-      case 'left':
       case 'right':
-        return `${baseClasses} flex-col space-y-1`;
+        return 'flex items-center justify-center';
+      case 'left':
+        return 'flex items-center justify-center';
       case 'bottom':
+        return 'flex items-end justify-center';
       default:
-        return `${baseClasses} flex-row space-x-2`;
+        return 'flex items-center justify-center space-x-1';
     }
   };
 
   const getPlayerInfoClasses = () => {
-    const baseClasses = "text-center p-2 rounded-lg min-w-max";
-    
-    if (isCurrentTurn) {
-      return `${baseClasses} bg-yellow-400 text-black ring-2 ring-yellow-300 animate-pulse`;
-    }
-    
-    if (player.role === 'landlord') {
-      return `${baseClasses} bg-yellow-600 text-white ring-2 ring-yellow-500`;
-    }
-    
-    return `${baseClasses} bg-gray-700 text-white`;
-  };
-
-  const renderCards = () => {
-    if (showCards && isCurrentPlayer) {
-      // Show actual cards for current player
-      return (
-        <div className={getCardContainerClasses()}>
-          {player.cards.map((card, index) => (
-            <Card
-              key={card.id}
-              card={card}
-              size={position === 'bottom' ? 'medium' : 'small'}
-              isSelected={selectedCards.includes(card.id)}
-              onClick={() => onCardSelect?.(card.id)}
-              className={position === 'bottom' ? 'hover:translate-y-[-4px]' : ''}
-            />
-          ))}
-        </div>
-      );
-    } else {
-      // Show card backs for other players
-      const cardCount = player.cardCount;
-      const cardsToShow = Math.min(cardCount, position === 'bottom' ? 17 : 8); // Limit display
-      
-      return (
-        <div className={getCardContainerClasses()}>
-          {Array.from({ length: cardsToShow }, (_, index) => (
-            <div
-              key={index}
-              className={`
-                ${position === 'bottom' ? 'w-12 h-18' : 'w-8 h-12'}
-                bg-blue-900 border-2 border-blue-700 rounded-lg
-                flex items-center justify-center text-white text-xs
-                ${position === 'left' || position === 'right' ? 'transform rotate-90' : ''}
-              `}
-            >
-              🂠
-            </div>
-          ))}
-          {cardCount > cardsToShow && (
-            <div className="text-white text-xs bg-gray-600 rounded px-2 py-1">
-              +{cardCount - cardsToShow}
-            </div>
-          )}
-        </div>
-      );
+    const baseClasses = 'flex flex-col items-center space-y-2';
+    switch (position) {
+      case 'right':
+        return `${baseClasses}`;
+      case 'left':
+        return `${baseClasses}`;
+      case 'bottom':
+        return `${baseClasses}`;
+      default:
+        return baseClasses;
     }
   };
 
-  const getPlayerStatusIcon = () => {
-    if (!player.isConnected) return '🔌';
-    if (player.role === 'landlord') return '👑';
-    if (player.isReady) return '✅';
-    return '⏳';
+  const renderPlayerAvatar = () => {
+    const avatarSize = position === 'bottom' ? 'w-16 h-16' : 'w-14 h-14';
+    const isLandlord = player.role === 'landlord';
+    
+    return (
+      <div className="relative">
+        <div className={`${avatarSize} rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold ${
+          position === 'bottom' ? 'text-lg' : 'text-base'
+        } shadow-lg ${
+          isCurrentTurn ? 'ring-4 ring-yellow-400 ring-opacity-75 animate-pulse' : ''
+        } ${isLandlord ? 'ring-2 ring-yellow-500' : ''}`}>
+          {player.username.charAt(0).toUpperCase()}
+        </div>
+        {isLandlord && (
+          <div className="absolute -top-1 -right-1 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-xs">
+            👑
+          </div>
+        )}
+        {isCurrentTurn && (
+          <div className={`absolute ${
+            position === 'bottom' ? '-bottom-2' : '-bottom-1'
+          } left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black text-xs px-2 py-1 rounded-full font-bold`}>
+            出牌
+          </div>
+        )}
+      </div>
+    );
   };
+
+  const renderCardCount = () => {
+    if (position === 'bottom') return null;
+    
+    return (
+      <div className="bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-sm font-bold">
+        {player.cardCount}张
+      </div>
+    );
+  };
+
+  if (showCards && player.cards) {
+    return (
+      <div className="flex flex-col items-center space-y-3">
+        <div className={getPlayerInfoClasses()}>
+          {renderPlayerAvatar()}
+          <span className="text-white font-bold text-sm bg-black/40 backdrop-blur-sm px-3 py-1 rounded-lg">
+            {player.username}
+          </span>
+        </div>
+        <div className={getCardContainerClasses()}>
+          {player.cards.map((card, index) => {
+            const isSelected = selectedCards?.includes(card.id);
+            let cardStyle: React.CSSProperties = {};
+            
+            if (position === 'bottom') {
+              // Fan layout for bottom player
+              const totalCards = player.cards.length;
+              const centerIndex = (totalCards - 1) / 2;
+              const offsetFromCenter = index - centerIndex;
+              const rotationAngle = offsetFromCenter * 3; // 3 degrees per card
+              const translateY = Math.abs(offsetFromCenter) * 2; // Slight curve
+              
+              cardStyle = {
+                transform: `rotate(${rotationAngle}deg) translateY(${translateY}px) ${
+                  isSelected ? 'translateY(-20px) scale(1.05)' : ''
+                }`,
+                marginLeft: index === 0 ? '0' : '-8px',
+                zIndex: isSelected ? 50 : index
+              };
+            } else {
+              // Horizontal stacked layout for side players
+              cardStyle = {
+                marginLeft: index === 0 ? '0' : '-6px',
+                zIndex: player.cards.length - index
+              };
+            }
+            
+            return (
+              <Card
+                key={card.id}
+                card={card}
+                isSelected={isSelected}
+                onClick={() => onCardSelect?.(card.id)}
+                size={position === 'bottom' ? 'medium' : 'small'}
+                className={position === 'bottom' ? 'transition-all duration-200 hover:scale-105' : ''}
+                style={cardStyle}
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={getPositionClasses()}>
-      {/* Player Info */}
+    <div className="flex flex-col items-center space-y-3">
       <div className={getPlayerInfoClasses()}>
-        <div className="flex items-center space-x-2">
-          <span className="text-lg">{getPlayerStatusIcon()}</span>
-          <div>
-            <div className="font-semibold text-sm">
-              {player.username}
-            </div>
-            <div className="text-xs opacity-75">
-              {player.cardCount} 张牌
-            </div>
-          </div>
-        </div>
-        
-        {/* Additional info for current turn */}
-        {isCurrentTurn && (
-          <div className="text-xs mt-1 font-bold">
-            {gamePhase === 'bidding' ? '叫地主中...' : '出牌中...'}
-          </div>
-        )}
-        
-        {/* Bid amount during bidding phase */}
-        {gamePhase === 'bidding' && player.bidAmount !== undefined && (
-          <div className="text-xs mt-1">
-            叫分: {player.bidAmount === 0 ? '不叫' : player.bidAmount}
-          </div>
-        )}
+        {renderPlayerAvatar()}
+        <span className="text-white font-bold text-sm bg-black/40 backdrop-blur-sm px-3 py-1 rounded-lg">
+          {player.username}
+        </span>
+        {renderCardCount()}
       </div>
-
-      {/* Cards */}
-      <div className="relative">
-        {renderCards()}
-        
-        {/* Card count indicator for non-current players */}
-        {!isCurrentPlayer && (
-          <div className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-            {player.cardCount}
+      <div className={getCardContainerClasses()}>
+        {Array.from({ length: player.cardCount }, (_, index) => (
+          <div
+            key={index}
+            className={`
+              w-12 h-18
+              bg-gradient-to-br from-blue-900 to-blue-800
+              border border-blue-600 rounded-md
+              flex items-center justify-center text-blue-300 text-2xl
+              shadow-md
+            `}
+            style={{
+              marginLeft: index === 0 ? '0' : '-30px',
+              zIndex: player.cardCount - index
+            }}
+          >
           </div>
-        )}
+        ))}
       </div>
-
-      {/* Connection status indicator */}
-      {!player.isConnected && (
-        <div className="text-red-400 text-xs">
-          🔌 连接断开
-        </div>
-      )}
     </div>
   );
 };
