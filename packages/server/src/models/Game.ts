@@ -443,8 +443,58 @@ function shuffleDeck(deck: Card[]): Card[] {
 function determineCardType(cards: Card[]): string {
   if (cards.length === 0) return '';
   if (cards.length === 1) return 'single';
-  if (cards.length === 2 && cards[0].rank === cards[1].rank) return 'pair';
-  if (cards.length === 3 && cards.every(c => c.rank === cards[0].rank)) return 'triple';
+  
+  // Group cards by rank for more complex analysis
+  const rankGroups: { [rank: string]: Card[] } = {};
+  cards.forEach(card => {
+    if (!rankGroups[card.rank]) {
+      rankGroups[card.rank] = [];
+    }
+    rankGroups[card.rank].push(card);
+  });
+  
+  const ranks = Object.keys(rankGroups);
+  const counts = ranks.map(rank => rankGroups[rank].length).sort((a, b) => b - a);
+  
+  // Check for specific combinations
+  if (cards.length === 2) {
+    if (counts[0] === 2) return 'pair';
+    // Check for rocket (both jokers)
+    const hasBlackJoker = cards.some(card => card.rank === 'black_joker');
+    const hasRedJoker = cards.some(card => card.rank === 'red_joker');
+    if (hasBlackJoker && hasRedJoker) return 'rocket';
+  }
+  
+  if (cards.length === 3 && counts[0] === 3) return 'triple';
+  
+  if (cards.length === 4) {
+    if (counts[0] === 4) return 'bomb';
+    if (counts[0] === 3 && counts[1] === 1) return 'triple_with_single';
+  }
+  
+  if (cards.length === 5 && counts[0] === 3 && counts[1] === 2) {
+    return 'triple_with_pair';
+  }
+  
+  // Check for straight (5+ consecutive cards)
+  if (cards.length >= 5) {
+    const nonJokers = cards.filter(card => card.rank !== 'black_joker' && card.rank !== 'red_joker');
+    if (nonJokers.length === cards.length && ranks.length === cards.length) {
+      // All different ranks, could be a straight
+      const rankValues = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+      const cardValues = nonJokers.map(card => rankValues.indexOf(card.rank)).sort((a, b) => a - b);
+      
+      let isConsecutive = true;
+      for (let i = 1; i < cardValues.length; i++) {
+        if (cardValues[i] - cardValues[i-1] !== 1) {
+          isConsecutive = false;
+          break;
+        }
+      }
+      
+      if (isConsecutive) return 'straight';
+    }
+  }
   
   // More complex combinations can be added here
   return 'combination';

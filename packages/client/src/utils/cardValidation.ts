@@ -48,7 +48,7 @@ const groupByRank = (cards: Card[]): { [rank: string]: Card[] } => {
   }, {} as { [rank: string]: Card[] });
 };
 
-// Check if cards form a valid single card
+// Check if cards form a valid single
 const isValidSingle = (cards: Card[]): ValidationResult => {
   if (cards.length === 1) {
     return {
@@ -127,7 +127,7 @@ const isValidBomb = (cards: Card[]): ValidationResult => {
   };
 };
 
-// Check if cards form a rocket (both jokers)
+// Check if cards form a valid rocket (both jokers)
 const isValidRocket = (cards: Card[]): ValidationResult => {
   if (cards.length === 2) {
     const hasBlackJoker = cards.some(card => card.rank === CardRank.BLACK_JOKER);
@@ -210,10 +210,80 @@ const isValidStraight = (cards: Card[]): ValidationResult => {
   };
 };
 
+// Check if cards form a valid triple with single (三带一)
+const isValidTripleWithSingle = (cards: Card[]): ValidationResult => {
+  if (cards.length === 4) {
+    const groups = groupByRank(cards);
+    const ranks = Object.keys(groups);
+    
+    // Should have exactly 2 different ranks
+    if (ranks.length === 2) {
+      const counts = ranks.map(rank => groups[rank].length);
+      counts.sort((a, b) => b - a); // Sort descending
+      
+      // Should be [3, 1] - one triple and one single
+      if (counts[0] === 3 && counts[1] === 1) {
+        return {
+          isValid: true,
+          handType: 'triple_with_single',
+          message: '三带一'
+        };
+      }
+    }
+  }
+  return {
+    isValid: false,
+    handType: 'invalid',
+    message: '三带一需要三张相同点数加一张单牌'
+  };
+};
+
+// Check if cards form a valid triple with pair (三带二)
+const isValidTripleWithPair = (cards: Card[]): ValidationResult => {
+  if (cards.length === 5) {
+    const groups = groupByRank(cards);
+    const ranks = Object.keys(groups);
+    
+    // Should have exactly 2 different ranks
+    if (ranks.length === 2) {
+      const counts = ranks.map(rank => groups[rank].length);
+      counts.sort((a, b) => b - a); // Sort descending
+      
+      // Should be [3, 2] - one triple and one pair
+      if (counts[0] === 3 && counts[1] === 2) {
+        return {
+          isValid: true,
+          handType: 'triple_with_pair',
+          message: '三带二'
+        };
+      }
+    }
+  }
+  return {
+    isValid: false,
+    handType: 'invalid',
+    message: '三带二需要三张相同点数加一对牌'
+  };
+};
+
 // Get hand strength for comparison
 const getHandStrength = (cards: Card[], handType: string): number => {
   if (handType === 'rocket') return Number.MAX_SAFE_INTEGER;
   if (handType === 'bomb') return getCardValue(cards[0]) + 1000;
+  
+  // For triple-based hands, compare by the triple's value
+  if (handType === 'triple' || handType === 'triple_with_single' || handType === 'triple_with_pair') {
+    const groups = groupByRank(cards);
+    const ranks = Object.keys(groups);
+    
+    // Find the rank that appears 3 times (the triple)
+    for (const rank of ranks) {
+      if (groups[rank].length === 3) {
+        return getCardValue(groups[rank][0]);
+      }
+    }
+  }
+  
   return getCardValue(cards[0]);
 };
 
@@ -233,6 +303,7 @@ const isHandBigger = (newHand: { cards: Card[]; handType: string }, lastHand: { 
   }
 
   // Different hand types (except bombs/rocket) can't beat each other
+  // Exception: triple, triple_with_single, and triple_with_pair are different types
   return false;
 };
 
@@ -267,10 +338,12 @@ export const validateCardHand = (
 
   console.log(`🎮 Selected cards:`, selectedCards.map(c => `${c.rank}${c.suit || ''}`));
 
-  // Try different hand types
+  // Try different hand types (order matters - check complex types first)
   const validations = [
     isValidRocket(selectedCards),
     isValidBomb(selectedCards),
+    isValidTripleWithPair(selectedCards),
+    isValidTripleWithSingle(selectedCards),
     isValidTriple(selectedCards),
     isValidPair(selectedCards),
     isValidSingle(selectedCards),
