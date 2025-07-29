@@ -61,13 +61,16 @@ export interface ErrorEventData {
 export interface ServerToClientEvents {
   authenticated: (data: AuthenticationData) => void;
   roomUpdated: (data: RoomEventData) => void;
-  roomListUpdated: (data: RoomListEventData) => void;
-  playerJoined: (data: PlayerEventData) => void;
-  playerLeft: (data: PlayerEventData) => void;
-  playerReadyChanged: (data: PlayerReadyEventData) => void;
-  gameStarted: (data: RoomEventData) => void;
+  playerJoined: (data: { room: Room; player: Player }) => void;
+  playerLeft: (data: { room: Room; playerId: string }) => void;
+  roomListUpdated: (data: { rooms: Room[] }) => void;
+  gameStarted: (data: { room: Room; game: unknown; message: string }) => void;
   roomLeft: (data: { roomId: string; message: string }) => void;
   error: (data: ErrorEventData) => void;
+  gameStateRestored: (data: { success: boolean; game: unknown; room: unknown; message: string }) => void;
+  gameStateUpdated: (data: unknown) => void;
+  cardsPlayResult: (data: unknown) => void;
+  passResult: (data: unknown) => void;
 }
 
 // Client Event Types (matching server-side interface)
@@ -406,7 +409,10 @@ export class SocketService {
     });
 
     this.socket.on('gameStarted', (data: RoomEventData) => {
-      console.log('🎮 SocketService - Game started:', data.room?.id);
+      console.log('🎮 SocketService - Game started - RAW DATA:', data);
+      console.log('🎮 SocketService - Game started - data.room:', data.room);
+      console.log('🎮 SocketService - Game started - data.game:', data.game);
+      console.log('🎮 SocketService - Game started - room ID:', data.room?.id);
       this.notifyListeners('gameStarted', data);
     });
   }
@@ -470,7 +476,23 @@ export class SocketService {
     }
   }
 
-  // Room Operations
+  // Public emit method for external use
+  public emit(event: string, data?: any): void {
+    if (!this.socket) {
+      console.error('🔌 SocketService - Cannot emit: socket not initialized');
+      return;
+    }
+    
+    if (!this.socket.connected) {
+      console.error('🔌 SocketService - Cannot emit: socket not connected');
+      return;
+    }
+    
+    console.log(`🔌 SocketService - Emitting '${event}' event:`, data);
+    this.socket.emit(event, data);
+  }
+
+  // Room Management
   public joinRoom(roomId: string): void {
     if (!this.socket || !this.currentState.isAuthenticated) {
       throw new Error('Socket not connected or not authenticated');

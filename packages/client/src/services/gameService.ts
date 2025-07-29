@@ -19,7 +19,7 @@ class GameService {
   // Get current game state
   async getGameState(roomId: string): Promise<ApiResponse<any>> {
     try {
-      const response = await fetch(`${this.baseUrl}/games/${roomId}`, {
+      const response = await fetch(`${this.baseUrl}/rooms/${roomId}/game`, {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });

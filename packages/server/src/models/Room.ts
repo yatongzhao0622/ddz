@@ -218,14 +218,13 @@ RoomSchema.methods.toSafeObject = function() {
       userId: player.userId.toString(),
       username: player.username,
       isReady: player.isReady,
-      isConnected: true, // Assume connected for API data
-      joinedAt: player.joinedAt
+      isConnected: player.isConnected || false
     })),
     status: this.status,
     createdBy: this.createdBy.toString(),
+    gameSession: this.gameSession?.toString() || null,
     createdAt: this.createdAt,
-    isPrivate: this.settings.isPrivate,
-    settings: this.settings
+    updatedAt: this.updatedAt
   };
 };
 

@@ -100,11 +100,14 @@ const Card: React.FC<CardProps> = ({
         ${getSizeClasses(size)}
         ${getCardBackground()}
         ${getTextColor()}
-        border-2 border-gray-300 rounded-lg cursor-pointer
+        border-2 rounded-lg cursor-pointer
         select-none relative overflow-hidden
         transition-all duration-200 ease-in-out
         hover:scale-105 hover:shadow-lg
-        ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 transform translate-y-[-8px]' : ''}
+        ${isSelected ? 
+          'border-blue-500 border-4 ring-2 ring-blue-400 ring-offset-1 transform translate-y-[-8px] shadow-xl bg-blue-50' : 
+          'border-gray-300'
+        }
         ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
       `}
@@ -112,7 +115,7 @@ const Card: React.FC<CardProps> = ({
       title={`${getRankDisplay(card.rank)}${card.suit ? getSuitSymbol(card.suit) : ''}`}
     >
       {/* Top-left corner */}
-      <div className="absolute top-1 left-1 flex flex-col items-center leading-none">
+      <div className={`absolute top-1 left-1 flex flex-col items-center leading-none ${isSelected ? 'text-blue-800 font-extrabold' : ''}`}>
         <span className="font-bold">{getRankDisplay(card.rank)}</span>
         {card.suit && (
           <span className="text-xs">{getSuitSymbol(card.suit)}</span>
@@ -120,7 +123,7 @@ const Card: React.FC<CardProps> = ({
       </div>
 
       {/* Center symbol/character */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className={`absolute inset-0 flex items-center justify-center ${isSelected ? 'text-blue-800' : ''}`}>
         {card.rank === CardRank.BLACK_JOKER ? (
           <div className="text-center">
             <div className="text-lg font-bold">小</div>
@@ -132,24 +135,21 @@ const Card: React.FC<CardProps> = ({
             <div className="text-xs">王</div>
           </div>
         ) : (
-          <span className="text-2xl font-bold opacity-20">
+          <span className={`text-2xl font-bold ${isSelected ? 'opacity-40 text-blue-600' : 'opacity-20'}`}>
             {getSuitSymbol(card.suit)}
           </span>
         )}
       </div>
 
       {/* Bottom-right corner (rotated) */}
-      <div className="absolute bottom-1 right-1 flex flex-col items-center leading-none transform rotate-180">
+      <div className={`absolute bottom-1 right-1 flex flex-col items-center leading-none transform rotate-180 ${isSelected ? 'text-blue-800 font-extrabold' : ''}`}>
         <span className="font-bold">{getRankDisplay(card.rank)}</span>
         {card.suit && (
           <span className="text-xs">{getSuitSymbol(card.suit)}</span>
         )}
       </div>
 
-      {/* Selection indicator */}
-      {isSelected && (
-        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-lg border-2 border-blue-500"></div>
-      )}
+      {/* Remove the problematic selection overlay */}
     </div>
   );
 };

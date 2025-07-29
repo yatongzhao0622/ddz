@@ -57,6 +57,8 @@ interface RoomsState {
   lastRoomUpdate: Date | null;
   lastPlayerJoined: Player | null;
   lastPlayerLeft: Player | null;
+  needsGameStateRestore: boolean;
+  gameSessionToRestore: any;
 }
 
 const initialState: RoomsState = {
@@ -64,7 +66,7 @@ const initialState: RoomsState = {
   isLoadingRooms: false,
   roomsError: null,
   
-  currentRoom: null,
+  currentRoom: null as Room | null,
   isJoiningRoom: false,
   isLeavingRoom: false,
   roomActionError: null,
@@ -80,7 +82,9 @@ const initialState: RoomsState = {
   
   lastRoomUpdate: null,
   lastPlayerJoined: null,
-  lastPlayerLeft: null
+  lastPlayerLeft: null,
+  needsGameStateRestore: false,
+  gameSessionToRestore: null as string | null
 };
 
 // API-based Async Thunks for Room Operations
@@ -215,19 +219,26 @@ export const startGame = createAsyncThunk(
   'rooms/startGame',
   async (roomId: string, { rejectWithValue }) => {
     try {
+      console.log('🎮 startGame thunk - Starting game for room:', roomId);
+      
       if (typeof window === 'undefined') {
+        console.error('🎮 startGame thunk - Not in browser environment');
         return rejectWithValue('Not available on server side');
       }
       
       const { socketService } = await import('../../services/socketServiceInstance');
       
       if (!socketService.isAuthenticated()) {
+        console.error('🎮 startGame thunk - Not authenticated');
         return rejectWithValue('Not authenticated');
       }
       
+      console.log('🎮 startGame thunk - Calling socketService.startGame');
       socketService.startGame(roomId);
+      console.log('🎮 startGame thunk - startGame called successfully');
       return roomId;
     } catch (error) {
+      console.error('🎮 startGame thunk - Error:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to start game');
     }
   }
@@ -250,9 +261,20 @@ const roomsSlice = createSlice({
       const room = action.payload;
       console.log('🔧 Redux updateCurrentRoom - Setting current room:', room?.id);
       console.log('🔧 Redux updateCurrentRoom - Room players:', room?.players);
+      console.log('🔧 Redux updateCurrentRoom - Room status:', room?.status);
+      console.log('🔧 Redux updateCurrentRoom - Room gameSession:', (room as any)?.gameSession);
+      
       state.currentRoom = room;
       state.lastRoomUpdate = new Date();
       state.roomActionError = null;
+      
+      // Check if this room has an active game session
+      if (room?.status === 'playing' && (room as any)?.gameSession) {
+        console.log('🎮 Redux updateCurrentRoom - Room has active game session, should restore game state');
+        // Set a flag that middleware can detect to restore game state
+        state.needsGameStateRestore = true;
+        state.gameSessionToRestore = (room as any).gameSession;
+      }
       
       // Update current user ready state if we're in this room
       if (state.currentRoom) {
@@ -286,12 +308,23 @@ const roomsSlice = createSlice({
     },
 
     // Game started event
-    gameStarted: (state, action: PayloadAction<{ room: Room }>) => {
-      const { room } = action.payload;
-      state.currentRoom = room;
+    gameStarted: (state, action: PayloadAction<{ room: Room; game: any; message: string }>) => {
+      const { room, game, message } = action.payload;
+      console.log('🎮 Redux gameStarted - Game started for room:', room?.id);
+      console.log('🎮 Redux gameStarted - Game data:', game);
+      
+      // Update room status to playing
+      if (room) {
+        state.currentRoom = { ...room, status: 'playing' };
+        console.log('🎮 Redux gameStarted - Updated room status to playing');
+      }
+      
+      // Clear any room-related loading states
       state.isStartingGame = false;
       state.gameStartError = null;
       state.lastRoomUpdate = new Date();
+      
+      console.log('🎮 Redux gameStarted - Room updated, ready for game UI');
     },
 
     // Set current user ready state
@@ -307,7 +340,7 @@ const roomsSlice = createSlice({
       state.roomCreationError = null;
     },
 
-    // Clear current room
+    // Clear current room and game state
     clearCurrentRoom: (state) => {
       console.log('🔧 Redux - Clearing current room state');
       state.currentRoom = null;
@@ -320,6 +353,12 @@ const roomsSlice = createSlice({
       state.isStartingGame = false;
       state.roomActionError = null;
       state.gameStartError = null;
+    },
+
+    // Clear game state restore flag
+    clearGameStateRestoreFlag: (state) => {
+      state.needsGameStateRestore = false;
+      state.gameSessionToRestore = null;
     },
 
     // Reset rooms state
@@ -454,6 +493,7 @@ export const {
   setCurrentUserReady,
   clearRoomErrors,
   clearCurrentRoom,
+  clearGameStateRestoreFlag,
   resetRoomsState
 } = roomsSlice.actions;
 

@@ -2,6 +2,7 @@ import { configureStore, EnhancedStore } from '@reduxjs/toolkit';
 import authSlice from './slices/authSlice';
 import socketSlice from './slices/socketSlice';
 import roomsSlice from './slices/roomsSlice';
+import gameSlice from './slices/gameSlice';
 import { socketMiddleware } from './middleware/socketMiddleware';
 
 export const store: EnhancedStore = configureStore({
@@ -9,6 +10,7 @@ export const store: EnhancedStore = configureStore({
     auth: authSlice,
     socket: socketSlice,
     rooms: roomsSlice,
+    game: gameSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

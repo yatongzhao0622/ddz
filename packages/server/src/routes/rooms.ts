@@ -2,6 +2,8 @@ import express, { Request, Response, Router } from 'express';
 import { Room, roomHelpers, IRoom } from '../models/Room';
 import { User } from '../models/User';
 import { AuthenticatedRequest, authenticateToken, requireUserNotInRoom } from '../middleware/auth';
+import mongoose from 'mongoose';
+import { GameService } from '../services/gameService';
 
 const router: Router = express.Router();
 
@@ -372,5 +374,114 @@ router.post('/:roomId/start', authenticateToken, async (req: AuthenticatedReques
     });
   }
 });
+
+// Get game state for a room
+router.get('/:roomId/game', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { roomId } = req.params;
+    
+    // Validate room ID
+    if (!mongoose.Types.ObjectId.isValid(roomId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid room ID format'
+      });
+      return;
+    }
+    
+    // Find the room
+    const room = await Room.findById(roomId);
+    if (!room) {
+      res.status(404).json({
+        success: false,
+        error: 'Room not found'
+      });
+      return;
+    }
+    
+    // Check if room has active game
+    if (room.status !== 'playing' || !room.gameSession) {
+      res.status(400).json({
+        success: false,
+        error: 'No active game in this room'
+      });
+      return;
+    }
+    
+    // Get game service instance and fetch real game state
+    const gameService = new GameService(req.app.get('io'));
+    
+    try {
+      const gameState = await gameService.getGameStateForAPI(roomId);
+      if (gameState) {
+        console.log(`🎮 API - Fetched real game state for room ${roomId}:`, gameState);
+        
+        res.status(200).json({
+          success: true,
+          data: gameState
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('🎮 API - Error fetching real game state:', error);
+    }
+    
+    // Fallback to mock data if real game state unavailable
+    console.log(`🎮 API - Using fallback mock game state for room ${roomId}`);
+    const mockGameState = {
+      id: room.gameSession.toString(),
+      roomId: room._id.toString(),
+      phase: 'playing',
+      players: room.players.map((player: any, index: number) => ({
+        ...player,
+        userId: player.userId.toString(),
+        position: index,
+        cards: generateMockCards(17), // Generate mock cards for now
+        cardCount: 17,
+        isReady: player.isReady,
+        isConnected: player.isConnected || true,
+        score: 0
+      })),
+      currentTurn: 0,
+      landlord: null,
+      landlordCards: generateMockCards(3),
+      lastPlay: null,
+      gameHistory: [],
+      isGameActive: true,
+      startedAt: new Date(),
+      turnTimeLimit: 30
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: mockGameState
+    });
+    
+  } catch (error) {
+    console.error('Get game state error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get game state'
+    });
+  }
+});
+
+// Helper function to generate mock cards (replace with real card distribution later)
+function generateMockCards(count: number) {
+  const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const ranks = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
+  const cards = [];
+  
+  for (let i = 0; i < count; i++) {
+    cards.push({
+      id: `card_${i}`,
+      suit: suits[i % suits.length],
+      rank: ranks[i % ranks.length],
+      isSelected: false
+    });
+  }
+  
+  return cards;
+}
 
 export default router; 

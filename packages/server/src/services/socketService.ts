@@ -12,6 +12,7 @@ export interface ClientToServerEvents {
   toggleReady: (data: { roomId: string }) => void;
   startGame: (data: { roomId: string }) => void;
   requestRoomList: () => void;
+  bid: (data: { roomId: string; bidAmount: number }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -24,6 +25,7 @@ export interface ServerToClientEvents {
   gameStarted: (data: { room: any }) => void;
   roomLeft: (data: { success: boolean; message?: string }) => void;
   error: (data: { message: string; code: string }) => void;
+  gameStateRestored: (data: { success: boolean; game: any; room: any; message: string }) => void;
 }
 
 // Socket user data interface
@@ -35,12 +37,12 @@ interface SocketUserData {
 
 // Extend Socket interface
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {
-  userData?: SocketUserData;
+  userData?: TokenPayload; // Changed to TokenPayload
 }
 
 export class SocketService {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
-  private connectedUsers: Map<string, AuthenticatedSocket> = new Map();
+  private connectedUsers: Map<string, AuthenticatedSocket> = new Map(); // Changed to AuthenticatedSocket
   private gameService: any; // Placeholder for game service
 
   constructor(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>) {
@@ -58,16 +60,37 @@ export class SocketService {
         error: 'Please authenticate'
       });
 
-      // Authentication handler
-      socket.on('authenticate', async (data: { token: string }) => {
-        try {
-          await this.handleAuthentication(socket, data.token);
-        } catch (error) {
-          console.error('Socket authentication error:', error);
-          socket.emit('authenticated', {
-            success: false,
-            error: 'Authentication failed'
+      // Handle authentication
+      socket.on('authenticate', (data: { token: string }) => {
+        console.log(`🔐 SocketService - Authentication request from ${socket.id}`);
+        const userData = verifyToken(data.token);
+        if (userData) {
+          socket.userData = userData;
+          
+          // Join user-specific room for personalized game updates
+          socket.join(`user_${userData.userId}`);
+          console.log(`✅ SocketService - Socket ${socket.id} joined user room: user_${userData.userId}`);
+          
+          // Add to connected users map
+          this.connectedUsers.set(socket.id, {
+            userId: userData.userId,
+            username: userData.username,
+            socketId: socket.id,
+            connectedAt: new Date()
           });
+
+          socket.emit('authenticated', { 
+            success: true, 
+            user: { 
+              id: userData.userId, 
+              username: userData.username 
+            } 
+          });
+          
+          console.log(`✅ SocketService - User ${userData.username} authenticated and joined user room`);
+        } else {
+          console.error('❌ SocketService - Invalid token during authentication');
+          socket.emit('authenticated', { success: false, error: 'Invalid token' });
         }
       });
 
@@ -107,6 +130,18 @@ export class SocketService {
       socket.on('requestRoomList', async () => {
         await this.handleRequestRoomList(socket);
       });
+
+      // Bid event
+      socket.on('bid', (data) => this.handleBid(socket, data));
+
+      // Play cards event
+      socket.on('playCards', (data) => {
+        console.log(`🎮 SocketService - Received 'playCards' event from ${socket.id}:`, data);
+        this.handlePlayCards(socket, data);
+      });
+
+      // Pass turn event
+      socket.on('pass', (data) => this.handlePass(socket, data));
 
       // Disconnection handler
       socket.on('disconnect', async (reason: string) => {
@@ -205,6 +240,10 @@ export class SocketService {
       const existingPlayer = room.players.find(p => p.userId.toString() === socket.userData!.userId);
       if (existingPlayer) {
         console.log(`✅ handleJoinRoom - Player already in room, updating connection`);
+        console.log(`🔍 DEBUG - Room status: ${room.status}`);
+        console.log(`🔍 DEBUG - Room ID: ${roomId}`);
+        console.log(`🔍 DEBUG - GameService available: ${!!this.gameService}`);
+        
         // Player already in room, just join the socket room
         socket.join(`room_${roomId}`);
         socket.userData!.roomId = roomId;
@@ -213,6 +252,59 @@ export class SocketService {
         socket.emit('roomUpdated', {
           room: room.toSafeObject()
         });
+        
+        // Check if there's an active game and restore game state for reconnecting player
+        if (room.status === 'playing' && this.gameService && room.gameSession) {
+          console.log(`🎮 Restoring game state for reconnecting player: ${socket.userData!.username}`);
+          console.log(`🔍 DEBUG - Socket ID: ${socket.id}`);
+          console.log(`🔍 DEBUG - Socket connected: ${socket.connected}`);
+          console.log(`🔍 DEBUG - Socket rooms: ${JSON.stringify([...socket.rooms])}`);
+          console.log(`🔍 DEBUG - Room gameSession (DB): ${room.gameSession}`);
+          console.log(`🔍 DEBUG - Room toSafeObject:`, room.toSafeObject());
+          console.log(`🔍 DEBUG - About to call this.gameService.getGame(${roomId})`);
+          try {
+            const game = await this.gameService.getGame(roomId);
+            console.log(`🔍 DEBUG - Game found: ${!!game}`);
+            if (game) {
+              console.log(`🔍 DEBUG - Game object type: ${typeof game}`);
+              console.log(`🔍 DEBUG - Game toSafeObject method exists: ${typeof game.toSafeObject}`);
+              const gameData = game.toSafeObject();
+              console.log(`🔍 DEBUG - Game data keys: ${Object.keys(gameData)}`);
+              console.log(`🔍 DEBUG - Game data sample:`, { 
+                phase: gameData.phase, 
+                players: gameData.players?.length,
+                gameId: gameData.gameId 
+              });
+              
+              const eventPayload = {
+                success: true,
+                game: gameData,
+                room: room.toSafeObject(),
+                message: '游戏状态已恢复'
+              };
+              
+              console.log(`🔍 DEBUG - About to emit gameStateRestored with payload keys: ${Object.keys(eventPayload)}`);
+              
+              // Add a small delay to ensure client is properly connected and listening
+              setTimeout(() => {
+                console.log(`🔍 DEBUG - Emitting gameStateRestored to socket ${socket.id}`);
+                socket.emit('gameStateRestored', eventPayload);
+                
+                // Send a roomUpdated event to verify the connection works
+                console.log(`🔍 DEBUG - Emitting roomUpdated test event to socket ${socket.id}`);
+                socket.emit('roomUpdated', { room: room.toSafeObject() });
+                
+                console.log(`✅ Game state restored for ${socket.userData!.username}`);
+              }, 100);
+            } else {
+              console.log(`❌ No game found for room ${roomId} despite gameSession ${room.gameSession}`);
+            }
+          } catch (error) {
+            console.error('❌ Failed to restore game state:', error);
+          }
+        } else {
+          console.log(`🔍 DEBUG - Not restoring game state. Room status: ${room.status}, GameService: ${!!this.gameService}, GameSession: ${room.gameSession}`);
+        }
         
         // Also broadcast that the player reconnected (to update connection status)
         this.io.to(`room_${roomId}`).emit('playerJoined', {
@@ -396,46 +488,75 @@ export class SocketService {
   // Game Event Handlers
   private async handleStartGame(socket: AuthenticatedSocket, data: any): Promise<void> {
     try {
-      console.log(`🎮 ${socket.userData!.username} requesting to start game in room ${data.roomId}`);
+      console.log(`🎮 SocketService - handleStartGame called with data:`, data);
+      console.log(`🎮 SocketService - User: ${socket.userData!.username}, Room: ${data.roomId}`);
       
       if (this.gameService) {
         await this.gameService.handleStartGame(socket, data.roomId);
       } else {
-        socket.emit('error', { message: 'Game service not available' });
+        console.error('❌ SocketService - Game service not available');
+        socket.emit('error', { message: 'Game service not available', code: 'GAME_SERVICE_UNAVAILABLE' });
       }
     } catch (error) {
-      console.error('Error starting game:', error);
-      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to start game' });
+      console.error('❌ SocketService - handleStartGame error:', error);
+      socket.emit('error', { 
+        message: error instanceof Error ? error.message : 'Failed to start game', 
+        code: 'START_GAME_ERROR' 
+      });
     }
   }
 
   private async handleBid(socket: AuthenticatedSocket, data: any): Promise<void> {
     try {
-      console.log(`🎮 ${socket.userData!.username} bidding in room ${data.roomId}`);
+      console.log(`🎮 SocketService.handleBid - Called with data:`, data);
+      console.log(`🎮 SocketService.handleBid - Socket userData:`, socket.userData);
+      
+      if (!socket.userData) {
+        console.error('🎮 SocketService.handleBid - No authentication data');
+        socket.emit('error', { message: 'Authentication required', code: 'AUTH_REQUIRED' });
+        return;
+      }
+
+      console.log(`🎮 SocketService.handleBid - ${socket.userData.username} bidding in room ${data.roomId}: ${data.amount}`);
       
       if (this.gameService) {
+        console.log(`🎮 SocketService.handleBid - Calling gameService.handleBid...`);
         await this.gameService.handleBid(socket, data);
+        console.log(`🎮 SocketService.handleBid - gameService.handleBid completed`);
       } else {
-        socket.emit('error', { message: 'Game service not available' });
+        console.error('🎮 SocketService.handleBid - Game service not available');
+        socket.emit('error', { message: 'Game service not available', code: 'GAME_SERVICE_ERROR' });
       }
     } catch (error) {
-      console.error('Error processing bid:', error);
-      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to process bid' });
+      console.error('🎮 SocketService.handleBid - Error processing bid:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to process bid', code: 'BID_ERROR' });
     }
   }
 
   private async handlePlayCards(socket: AuthenticatedSocket, data: any): Promise<void> {
     try {
-      console.log(`🎮 ${socket.userData!.username} playing cards in room ${data.roomId}`);
+      console.log(`🎮 SocketService.handlePlayCards - Called with data:`, data);
+      console.log(`🎮 SocketService.handlePlayCards - Socket userData:`, socket.userData);
+      
+      if (!socket.userData) {
+        console.error('🎮 SocketService.handlePlayCards - No authentication data');
+        socket.emit('error', { message: 'Authentication required', code: 'AUTH_REQUIRED' });
+        return;
+      }
+
+      console.log(`🎮 SocketService.handlePlayCards - ${socket.userData.username} playing cards in room ${data.roomId}:`, data.cardIds);
       
       if (this.gameService) {
+        console.log(`🎮 SocketService.handlePlayCards - Calling gameService.handlePlayCards...`);
         await this.gameService.handlePlayCards(socket, data);
+        console.log(`🎮 SocketService.handlePlayCards - gameService.handlePlayCards completed`);
       } else {
-        socket.emit('error', { message: 'Game service not available' });
+        console.error('🎮 SocketService.handlePlayCards - Game service not available');
+        socket.emit('error', { message: 'Game service not available', code: 'GAME_SERVICE_ERROR' });
       }
     } catch (error) {
-      console.error('Error playing cards:', error);
-      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to play cards' });
+      console.error('🎮 SocketService.handlePlayCards - Error processing play cards:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to process play cards', code: 'PLAY_CARDS_ERROR' });
     }
   }
 
@@ -450,7 +571,7 @@ export class SocketService {
       }
     } catch (error) {
       console.error('Error passing turn:', error);
-      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to pass turn' });
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to pass turn', code: 'PASS_TURN_ERROR' });
     }
   }
 
@@ -477,14 +598,14 @@ export class SocketService {
   private async handleDisconnection(socket: AuthenticatedSocket, reason: string): Promise<void> {
     if (socket.userData) {
       // Remove from connected users
-      this.connectedUsers.delete(socket.userData.userId);
+      this.connectedUsers.delete(socket.id); // Changed to socket.id
 
       // Update user offline status with a delay to handle quick reconnections (page refresh)
       const userData = socket.userData; // Capture userData before timeout
       setTimeout(async () => {
         try {
           // Check if user reconnected in the meantime
-          if (!this.connectedUsers.has(userData.userId)) {
+          if (!this.connectedUsers.has(socket.id)) { // Changed to socket.id
             const user = await User.findById(userData.userId);
             if (user) {
               await user.updateLoginStatus(false);

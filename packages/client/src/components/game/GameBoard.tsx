@@ -9,6 +9,7 @@ import GameStatus from './GameStatus';
 interface GameBoardProps {
   gameState: GameState;
   currentUserId: string;
+  selectedCards?: string[];
   onCardSelect?: (cardId: string) => void;
   onCardPlay?: () => void;
   onPass?: () => void;
@@ -18,6 +19,7 @@ interface GameBoardProps {
 const GameBoard: React.FC<GameBoardProps> = ({
   gameState,
   currentUserId,
+  selectedCards = [],
   onCardSelect,
   onCardPlay,
   onPass,
@@ -92,6 +94,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
         <PlayArea
           gameState={gameState}
           currentPlayer={currentPlayer}
+          selectedCards={selectedCards}
           onCardPlay={onCardPlay}
           onPass={onPass}
           onBid={onBid}
@@ -107,6 +110,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           isCurrentTurn={gameState.currentTurn === playerArrangement.bottom.position}
           gamePhase={gameState.phase}
           onCardSelect={onCardSelect}
+          selectedCards={selectedCards}
           showCards={true}
         />
       </div>

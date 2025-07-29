@@ -6,12 +6,13 @@ import Card from './Card';
 
 interface PlayerAreaProps {
   player: GamePlayer;
-  position: 'top' | 'left' | 'right' | 'bottom';
+  position: 'bottom' | 'left' | 'right' | 'top';
   isCurrentPlayer: boolean;
   isCurrentTurn: boolean;
   gamePhase: GamePhase;
   onCardSelect?: (cardId: string) => void;
   showCards?: boolean;
+  selectedCards?: string[]; // Add selectedCards prop
 }
 
 const PlayerArea: React.FC<PlayerAreaProps> = ({
@@ -21,7 +22,8 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
   isCurrentTurn,
   gamePhase,
   onCardSelect,
-  showCards = false
+  showCards = false,
+  selectedCards = []
 }) => {
   const getPositionClasses = () => {
     const baseClasses = "flex flex-col items-center space-y-2";
@@ -78,7 +80,7 @@ const PlayerArea: React.FC<PlayerAreaProps> = ({
               key={card.id}
               card={card}
               size={position === 'bottom' ? 'medium' : 'small'}
-              isSelected={card.isSelected}
+              isSelected={selectedCards.includes(card.id)}
               onClick={() => onCardSelect?.(card.id)}
               className={position === 'bottom' ? 'hover:translate-y-[-4px]' : ''}
             />

@@ -34,6 +34,18 @@ export default function RoomInterior({
     room.players.every(p => p.isReady || p.userId === currentUserId) &&
     room.status === 'waiting';
 
+  // Debug logging for start game conditions
+  console.log('🔍 RoomInterior - Start Game Debug:', {
+    isRoomCreator,
+    currentUserId,
+    roomCreatedBy: room.createdBy,
+    playerCount: room.players.length,
+    playersReady: room.players.map(p => ({ userId: p.userId, username: p.username, isReady: p.isReady })),
+    allPlayersReady: room.players.every(p => p.isReady || p.userId === currentUserId),
+    roomStatus: room.status,
+    canStartGame
+  });
+
   const getReadyPlayersCount = useCallback(() => {
     return room.players.filter(p => p.isReady).length;
   }, [room.players]);
