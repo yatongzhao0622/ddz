@@ -1,20 +1,25 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  reactCompiler: false,
   experimental: {
-    // Enable React 19 concurrent features
     reactCompiler: false,
   },
-  // Improve hydration handling
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+  // Environment variable configuration
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
   },
-  // Better browser extension compatibility
-  poweredByHeader: false,
-  // Optimize for development
-  devIndicators: {
-    appIsrStatus: true,
+  // Allow connecting to any host for development
+  async rewrites() {
+    return [
+      // API rewrites for development
+      {
+        source: '/api/:path*',
+        destination: `${process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001'}/api/:path*`,
+      },
+    ];
   },
 };
 

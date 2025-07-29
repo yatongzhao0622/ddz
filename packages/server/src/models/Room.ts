@@ -35,6 +35,7 @@ export interface IRoom extends Document {
 // Room Model Interface with custom static methods
 export interface IRoomModel extends Model<IRoom> {
   findAvailableRooms(): Promise<IRoom[]>;
+  findVisibleRooms(userId?: mongoose.Types.ObjectId): Promise<IRoom[]>;
   findByRoomCode(roomCode: string): Promise<IRoom | null>;
   findUserCurrentRoom(userId: mongoose.Types.ObjectId): Promise<IRoom | null>;
   createRoom(roomData: {
@@ -235,6 +236,34 @@ RoomSchema.statics.findAvailableRooms = function() {
     'settings.isPrivate': false,
     $expr: { $lt: [{ $size: '$players' }, '$maxPlayers'] }
   }).sort({ createdAt: -1 }).limit(20);
+};
+
+// New method: Find all visible rooms (includes user's current room even if full)
+RoomSchema.statics.findVisibleRooms = function(userId?: mongoose.Types.ObjectId) {
+  if (!userId) {
+    // If no user ID, return only joinable rooms
+    return this.find({
+      status: 'waiting',
+      'settings.isPrivate': false,
+      $expr: { $lt: [{ $size: '$players' }, '$maxPlayers'] }
+    }).sort({ createdAt: -1 }).limit(20);
+  }
+  
+  return this.find({
+    $or: [
+      // Joinable rooms (not full, not private, waiting)
+      {
+        status: 'waiting',
+        'settings.isPrivate': false,
+        $expr: { $lt: [{ $size: '$players' }, '$maxPlayers'] }
+      },
+      // User's current room (even if full)
+      {
+        'players.userId': userId,
+        status: { $in: ['waiting', 'playing'] }
+      }
+    ]
+  }).sort({ createdAt: -1 }).limit(30);
 };
 
 RoomSchema.statics.findUserCurrentRoom = function(userId: mongoose.Types.ObjectId) {

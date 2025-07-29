@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { config } from '../utils/config';
 
 // Data Type Definitions
 export interface User {
@@ -124,7 +125,7 @@ export class SocketService {
 
   constructor(config?: Partial<SocketConnectionConfig>) {
     this.config = {
-      serverUrl: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001',
+      serverUrl: config?.serverUrl || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001',
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 5,

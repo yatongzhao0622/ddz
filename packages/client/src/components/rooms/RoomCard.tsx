@@ -22,19 +22,26 @@ export default function RoomCard({ room, onJoinRoom, currentUserId, isJoining }:
     currentUserId,
     players: room.players.map(p => ({ userId: p.userId, username: p.username })),
     isPlayerInRoom,
-    canJoin
+    canJoin,
+    isRoomFull,
+    currentPlayerCount: room.currentPlayerCount,
+    maxPlayers: room.maxPlayers
   });
 
   const getStatusColor = () => {
+    if (isPlayerInRoom) return 'bg-blue-100 text-blue-800'; // Player is in this room
     switch (room.status) {
       case 'waiting': return 'bg-green-100 text-green-800';
-      case 'playing': return 'bg-blue-100 text-blue-800';
+      case 'playing': return 'bg-yellow-100 text-yellow-800';
       case 'finished': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = () => {
+    if (isPlayerInRoom) {
+      return room.status === 'waiting' ? '我的房间' : '游戏中';
+    }
     switch (room.status) {
       case 'waiting': return '等待中';
       case 'playing': return '游戏中';

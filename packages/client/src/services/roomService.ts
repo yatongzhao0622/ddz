@@ -1,8 +1,9 @@
 'use client';
 
 import { RoomCreationData } from '../components/rooms/CreateRoomModal';
+import { config } from '../utils/config';
 
-const API_BASE = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
+const API_BASE = config.serverUrl;
 
 export interface ApiRoom {
   id: string;

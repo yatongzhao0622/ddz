@@ -6,9 +6,18 @@ import { AuthenticatedRequest, authenticateToken, requireUserNotInRoom } from '.
 const router: Router = express.Router();
 
 // Get available rooms
-router.get('/available', async (req: Request, res: Response): Promise<void> => {
+router.get('/available', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const rooms = await Room.findAvailableRooms();
+    const userId = req.user?._id;
+    console.log(`🔍 Fetching visible rooms for user: ${userId}`);
+    
+    // Use findVisibleRooms to include user's current room even if full
+    const rooms = await Room.findVisibleRooms(userId);
+    
+    console.log(`📋 Found ${rooms.length} visible rooms`);
+    rooms.forEach(room => {
+      console.log(`  - ${room.roomName}: ${room.players.length}/${room.maxPlayers} players`);
+    });
     
     res.status(200).json({
       success: true,

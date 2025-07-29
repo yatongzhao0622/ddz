@@ -22,6 +22,7 @@ export interface ServerToClientEvents {
   playerLeft: (data: { room: any; player: any }) => void;
   playerReadyChanged: (data: { room: any; player: any; isReady: boolean }) => void;
   gameStarted: (data: { room: any }) => void;
+  roomLeft: (data: { success: boolean; message?: string }) => void;
   error: (data: { message: string; code: string }) => void;
 }
 
@@ -40,6 +41,7 @@ interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClien
 export class SocketService {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
   private connectedUsers: Map<string, AuthenticatedSocket> = new Map();
+  private gameService: any; // Placeholder for game service
 
   constructor(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>) {
     this.io = io;
@@ -99,7 +101,7 @@ export class SocketService {
           socket.emit('error', { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
           return;
         }
-        await this.handleStartGame(socket, data.roomId);
+        await this.handleStartGame(socket, data);
       });
 
       socket.on('requestRoomList', async () => {
@@ -199,20 +201,7 @@ export class SocketService {
 
       console.log(`✅ handleJoinRoom - Found room: ${room.roomName} (${room._id})`);
 
-      // Check if player can join room
-      if (room.status !== 'waiting') {
-        console.log(`❌ handleJoinRoom - Room is not in waiting status: ${room.status}`);
-        socket.emit('error', { message: 'Room is not accepting new players', code: 'ROOM_NOT_WAITING' });
-        return;
-      }
-
-      if (room.players.length >= room.maxPlayers) {
-        console.log(`❌ handleJoinRoom - Room is full: ${room.players.length}/${room.maxPlayers}`);
-        socket.emit('error', { message: 'Room is full', code: 'ROOM_FULL' });
-        return;
-      }
-
-      // Check if player is already in room
+      // First, check if player is already in room (allows reconnection even if room is full)
       const existingPlayer = room.players.find(p => p.userId.toString() === socket.userData!.userId);
       if (existingPlayer) {
         console.log(`✅ handleJoinRoom - Player already in room, updating connection`);
@@ -241,7 +230,20 @@ export class SocketService {
         return;
       }
 
-      // Add player to room
+      // Now check if new players can join
+      if (room.status !== 'waiting') {
+        console.log(`❌ handleJoinRoom - Room is not in waiting status: ${room.status}`);
+        socket.emit('error', { message: 'Room is not accepting new players', code: 'ROOM_NOT_WAITING' });
+        return;
+      }
+
+      if (room.players.length >= room.maxPlayers) {
+        console.log(`❌ handleJoinRoom - Room is full: ${room.players.length}/${room.maxPlayers}`);
+        socket.emit('error', { message: 'Room is full', code: 'ROOM_FULL' });
+        return;
+      }
+
+      // Add new player to room
       const updatedRoom = await room.addPlayer(
         socket.userData!.userId as any,
         socket.userData!.username
@@ -389,45 +391,72 @@ export class SocketService {
     }
   }
 
-  private async handleStartGame(socket: AuthenticatedSocket, roomId: string): Promise<void> {
+  // Add after the existing handleLeaveRoom method, before the broadcastRoomList method
+
+  // Game Event Handlers
+  private async handleStartGame(socket: AuthenticatedSocket, data: any): Promise<void> {
     try {
-      const room = await Room.findById(roomId);
-      if (!room) {
-        socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
-        return;
+      console.log(`🎮 ${socket.userData!.username} requesting to start game in room ${data.roomId}`);
+      
+      if (this.gameService) {
+        await this.gameService.handleStartGame(socket, data.roomId);
+      } else {
+        socket.emit('error', { message: 'Game service not available' });
       }
-
-      // Check if user is room creator
-      if (room.createdBy.toString() !== socket.userData!.userId) {
-        socket.emit('error', { 
-          message: 'Only room creator can start the game', 
-          code: 'NOT_ROOM_CREATOR' 
-        });
-        return;
-      }
-
-      // Start game
-      const updatedRoom = await room.startGame();
-
-      // Broadcast to room
-      this.io.to(`room_${roomId}`).emit('gameStarted', {
-        room: updatedRoom.toSafeObject()
-      });
-
-      this.io.to(`room_${roomId}`).emit('roomUpdated', {
-        room: updatedRoom.toSafeObject()
-      });
-
-      // Update room list for all clients
-      this.broadcastRoomList();
-
     } catch (error) {
-      console.error('Start game error:', error);
-      socket.emit('error', { 
-        message: error instanceof Error ? error.message : 'Failed to start game', 
-        code: 'START_GAME_ERROR' 
-      });
+      console.error('Error starting game:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to start game' });
     }
+  }
+
+  private async handleBid(socket: AuthenticatedSocket, data: any): Promise<void> {
+    try {
+      console.log(`🎮 ${socket.userData!.username} bidding in room ${data.roomId}`);
+      
+      if (this.gameService) {
+        await this.gameService.handleBid(socket, data);
+      } else {
+        socket.emit('error', { message: 'Game service not available' });
+      }
+    } catch (error) {
+      console.error('Error processing bid:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to process bid' });
+    }
+  }
+
+  private async handlePlayCards(socket: AuthenticatedSocket, data: any): Promise<void> {
+    try {
+      console.log(`🎮 ${socket.userData!.username} playing cards in room ${data.roomId}`);
+      
+      if (this.gameService) {
+        await this.gameService.handlePlayCards(socket, data);
+      } else {
+        socket.emit('error', { message: 'Game service not available' });
+      }
+    } catch (error) {
+      console.error('Error playing cards:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to play cards' });
+    }
+  }
+
+  private async handlePass(socket: AuthenticatedSocket, data: any): Promise<void> {
+    try {
+      console.log(`🎮 ${socket.userData!.username} passing turn in room ${data.roomId}`);
+      
+      if (this.gameService) {
+        await this.gameService.handlePass(socket, data);
+      } else {
+        socket.emit('error', { message: 'Game service not available' });
+      }
+    } catch (error) {
+      console.error('Error passing turn:', error);
+      socket.emit('error', { message: error instanceof Error ? error.message : 'Failed to pass turn' });
+    }
+  }
+
+  // Method to set game service reference
+  public setGameService(gameService: any): void {
+    this.gameService = gameService;
   }
 
   private async handleRequestRoomList(socket: AuthenticatedSocket): Promise<void> {
@@ -475,12 +504,23 @@ export class SocketService {
 
   private async broadcastRoomList(): Promise<void> {
     try {
-      const rooms = await Room.findAvailableRooms();
-      this.io.emit('roomListUpdated', {
-        rooms: rooms.map(room => room.toSafeObject())
-      });
+      console.log('📡 Broadcasting room list to all connected users');
+      
+      // For each connected user, send their personalized room list
+      for (const [socketId, socket] of this.connectedUsers) {
+        try {
+                     const rooms = await Room.findVisibleRooms(socket.userId);
+          socket.emit('roomListUpdated', {
+            rooms: rooms.map(room => room.toSafeObject())
+          });
+          
+          console.log(`✅ Sent ${rooms.length} rooms to user ${socket.username} (${socketId})`);
+        } catch (error) {
+          console.error(`❌ Failed to send room list to ${socket.username}:`, error);
+        }
+      }
     } catch (error) {
-      console.error('Broadcast room list error:', error);
+      console.error('❌ Failed to broadcast room list:', error);
     }
   }
 

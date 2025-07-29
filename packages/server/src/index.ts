@@ -6,7 +6,9 @@ import dotenv from 'dotenv';
 import { connectMongoDB, connectRedis, checkDatabaseHealth, createMockDatabaseWarning } from './config/database';
 import authRoutes from './routes/auth';
 import roomRoutes from './routes/rooms';
+import gameRoutes from './routes/games'; // Add game routes
 import { SocketService } from './services/socketService';
+import { GameService } from './services/gameService'; // Add GameService
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +22,8 @@ const io = new Server(httpServer, {
     credentials: true
   }
 });
+
+let gameService: GameService; // Add GameService
 
 // Initialize Redis connection (may be null in dev mode)
 const redis = connectRedis();
@@ -70,6 +74,7 @@ app.get('/api/status', (req: Request, res: Response) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/games', gameRoutes); // Add game routes
 
 // Development endpoint for testing
 app.get('/api/test', (req: Request, res: Response) => {
@@ -135,7 +140,13 @@ const startServer = async () => {
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth/*`);
       console.log(`🏠 Room API: http://localhost:${PORT}/api/rooms/*`);
+      console.log(`🎮 Game API: http://localhost:${PORT}/api/games/*`);
       console.log(`⚡ Socket.IO: Real-time room management active`);
+      
+      // Initialize game service after server starts
+      gameService = new GameService(io);
+      socketService.setGameService(gameService);
+      console.log(`🎮 Game service initialized and integrated`);
     });
     
   } catch (error) {
@@ -168,3 +179,5 @@ process.on('SIGTERM', async () => {
 
 // Start the server
 startServer(); 
+
+// Game service is integrated via socketService.setGameService() method 

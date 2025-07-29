@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { config } from '../../utils/config';
 
 interface User {
   id: string;
@@ -30,7 +31,7 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async (credentials: { username: string }, { rejectWithValue }) => {
     try {
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+              const response = await fetch(config.getApiEndpoint('/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,7 +60,7 @@ export const registerUser = createAsyncThunk(
   'auth/register',
   async (credentials: { username: string }, { rejectWithValue }) => {
     try {
-      const response = await fetch('http://localhost:3001/api/auth/register', {
+              const response = await fetch(`${config.apiUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,7 +91,7 @@ export const logoutUser = createAsyncThunk(
     try {
       const token = localStorage.getItem('token');
       
-      const response = await fetch('http://localhost:3001/api/auth/logout', {
+              const response = await fetch(`${config.apiUrl}/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -133,7 +134,7 @@ export const checkAuthStatus = createAsyncThunk(
       }
 
       console.log('🔍 checkAuthStatus - Validating token with server');
-      const response = await fetch('http://localhost:3001/api/auth/me', {
+              const response = await fetch(config.getApiEndpoint('/auth/me'), {
         headers: {
           'Authorization': `Bearer ${cleanToken}`,
         },
