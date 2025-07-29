@@ -43,8 +43,13 @@ export const useAuth = () => {
         globalAuthInProgress = true;
         globalAuthInitialized = true;
         
-        dispatch(checkAuthStatus()).finally(() => {
+        // Dispatch auth check and handle completion
+        const authPromise = dispatch(checkAuthStatus());
+        authPromise.then(() => {
           console.log('🔍 useAuth - Global auth check completed');
+          globalAuthInProgress = false;
+        }).catch(() => {
+          console.log('🔍 useAuth - Global auth check failed');
           globalAuthInProgress = false;
         });
       } else {

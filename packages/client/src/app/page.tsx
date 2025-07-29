@@ -3,21 +3,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
+import { useSocket } from '../hooks/useSocket';
 import UserProfile from '../components/auth/UserProfile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { Socket } from 'socket.io-client';
-
-interface ServerMessage {
-  message: string;
-  socketId: string;
-}
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user, error } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
-  const [serverMessage, setServerMessage] = useState<ServerMessage | null>(null);
+  const socket = useSocket();
   const [isClient, setIsClient] = useState(false);
 
   // Debug logging for auth state changes
@@ -25,11 +18,50 @@ export default function Home() {
     console.log('🔍 Home - Auth state changed:', { isAuthenticated, isLoading, hasUser: !!user, error });
   }, [isAuthenticated, isLoading, user, error]);
 
+  // Debug logging for socket state changes
+  useEffect(() => {
+    console.log('🔍 Home - Socket state changed:', {
+      isConnected: socket.isConnected,
+      isAuthenticated: socket.isAuthenticated,
+      roomCount: socket.rooms.availableRooms.length,
+      currentRoom: socket.rooms.currentRoom?.id,
+      lastError: socket.lastError,
+      connectionError: socket.connectionError
+    });
+  }, [socket.isConnected, socket.isAuthenticated, socket.rooms.availableRooms.length, socket.rooms.currentRoom, socket.lastError, socket.connectionError]);
+
+  // Manual authentication handler
+  const handleManualAuthenticate = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (token && socket.isConnected && !socket.isAuthenticated) {
+      console.log('🔧 Manual authentication attempt with token:', token.substring(0, 20) + '...');
+      socket.authenticate(token);
+    } else {
+      console.log('🔧 Cannot authenticate:', { 
+        hasToken: !!token, 
+        isConnected: socket.isConnected, 
+        alreadyAuthenticated: socket.isAuthenticated 
+      });
+    }
+  }, [socket]);
+
+  // Manual reconnect handler
+  const handleManualReconnect = useCallback(() => {
+    const token = localStorage.getItem('token');
+    console.log('🔧 Manual reconnect attempt');
+    if (socket.isConnected) {
+      socket.disconnect();
+    }
+    setTimeout(() => {
+      socket.connect(token || undefined);
+    }, 1000);
+  }, [socket]);
+
   // Memoize debug info to prevent unnecessary re-renders
   const debugInfo = useMemo(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    return `Auth: ${isAuthenticated ? 'YES' : 'NO'}, Loading: ${isLoading ? 'YES' : 'NO'}, Token: ${token ? 'EXISTS' : 'NONE'}, Error: ${error || 'NONE'}`;
-  }, [isAuthenticated, isLoading, error]);
+    return `Auth: ${isAuthenticated ? 'YES' : 'NO'}, Socket: ${socket.isConnected ? 'YES' : 'NO'}, Token: ${token ? 'EXISTS' : 'NONE'}`;
+  }, [isAuthenticated, socket.isConnected]);
 
   // Stable callback for clearing localStorage
   const clearAllAndReload = useCallback(() => {
@@ -47,7 +79,7 @@ export default function Home() {
     setIsClient(true);
   }, []);
 
-  // Redirect to login if not authenticated - with detailed logging
+  // Redirect to login if not authenticated
   useEffect(() => {
     console.log('🔍 Home - Redirect check:', { isClient, isLoading, isAuthenticated });
     
@@ -57,53 +89,26 @@ export default function Home() {
     }
   }, [isAuthenticated, isLoading, isClient, router]);
 
-  // Socket connection effect - only when actually authenticated
+  // Request room list when socket is authenticated
   useEffect(() => {
-    console.log('🔍 Home - Socket effect check:', { isClient, isAuthenticated, userId: user?.id });
-    
-    if (!isClient || !isAuthenticated || !user?.id) {
-      console.log('🔍 Home - Skipping socket connection');
-      return;
+    if (socket.isAuthenticated && socket.rooms.availableRooms.length === 0) {
+      console.log('🔍 Home - Requesting room list');
+      socket.getRoomList();
     }
+  }, [socket.isAuthenticated, socket.rooms.availableRooms.length, socket.getRoomList]);
 
-    console.log('🔍 Home - Creating socket connection');
-    let socketConnection: Socket | null = null;
-    
-    // Dynamic import of socket.io-client for client-side only
-    import('socket.io-client').then(({ io }) => {
-      socketConnection = io('http://localhost:3001');
-      setSocket(socketConnection);
+  const getSocketStatusColor = () => {
+    if (socket.isConnected && socket.isAuthenticated) return 'text-green-500';
+    if (socket.isConnected) return 'text-yellow-500';
+    return 'text-red-500';
+  };
 
-      socketConnection.on('connect', () => {
-        console.log('Connected to server:', socketConnection!.id);
-        setConnectionStatus('connected');
-      });
-
-      socketConnection.on('welcome', (data: ServerMessage) => {
-        console.log('Welcome message:', data);
-        setServerMessage(data);
-      });
-
-      socketConnection.on('disconnect', () => {
-        console.log('Disconnected from server');
-        setConnectionStatus('disconnected');
-      });
-    });
-
-    return () => {
-      console.log('🔍 Home - Cleaning up socket connection');
-      if (socketConnection) {
-        socketConnection.close();
-      }
-    };
-  }, [isClient, isAuthenticated, user?.id]);
-
-  const getStatusColor = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'text-green-500';
-      case 'disconnected': return 'text-red-500';
-      default: return 'text-yellow-500';
-    }
+  const getSocketStatusText = () => {
+    if (socket.isConnected && socket.isAuthenticated) return 'CONNECTED & AUTHENTICATED';
+    if (socket.isConnected) return 'CONNECTED (NOT AUTHENTICATED)';
+    if (socket.isConnecting) return 'CONNECTING...';
+    if (socket.isReconnecting) return 'RECONNECTING...';
+    return 'DISCONNECTED';
   };
 
   // Show loading while checking authentication
@@ -201,7 +206,7 @@ export default function Home() {
         </div>
 
         <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
-          {/* Connection Status */}
+          {/* Real-time Connection Status */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">
               🔗 Real-time Connection
@@ -209,42 +214,115 @@ export default function Home() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Status:</span>
-                <span className={`font-bold ${getStatusColor()}`}>
-                  {connectionStatus.toUpperCase()}
+                <span className={`font-bold ${getSocketStatusColor()}`}>
+                  {getSocketStatusText()}
                 </span>
               </div>
-              {socket && (
+              {socket.socketId && (
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Socket ID:</span>
                   <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
-                    {socket.id || 'Connecting...'}
+                    {socket.socketId}
                   </span>
                 </div>
               )}
-              {serverMessage && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
-                  <p className="text-green-800 font-medium">Server Message:</p>
-                  <p className="text-green-700 text-sm">{serverMessage.message}</p>
+              
+              {/* Authentication Controls */}
+              {socket.isConnected && !socket.isAuthenticated && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-yellow-800 font-medium mb-2">Socket Connected - Authentication Required</p>
+                  <button
+                    onClick={handleManualAuthenticate}
+                    className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                  >
+                    🔐 Authenticate Socket
+                  </button>
                 </div>
               )}
+
+              {/* Reconnection Controls */}
+              {(!socket.isConnected || socket.connectionError) && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-blue-800 font-medium mb-2">Connection Issues Detected</p>
+                  <button
+                    onClick={handleManualReconnect}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    🔄 Reconnect Socket
+                  </button>
+                </div>
+              )}
+
+              {socket.connectionError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                  <p className="text-red-800 font-medium">Connection Error:</p>
+                  <p className="text-red-700 text-sm">{socket.connectionError}</p>
+                </div>
+              )}
+              {socket.lastError && socket.lastError !== socket.connectionError && (
+                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
+                  <p className="text-orange-800 font-medium">Last Error:</p>
+                  <p className="text-orange-700 text-sm">{socket.lastError}</p>
+                </div>
+              )}
+
+              {/* Debug Info */}
+              <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded">
+                <p className="text-gray-700 font-medium text-sm mb-1">Debug Info:</p>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>Connected: {socket.isConnected ? '✅' : '❌'}</div>
+                  <div>Authenticated: {socket.isAuthenticated ? '✅' : '❌'}</div>
+                  <div>Token Available: {localStorage.getItem('token') ? '✅' : '❌'}</div>
+                  <div>Reconnect Attempts: {socket.reconnectAttempts}</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Game Actions */}
+          {/* Room Management */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">
-              🎮 Game Actions
+              🏠 Game Rooms
             </h2>
             <div className="space-y-3">
-              <button className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                🏠 Browse Rooms
-              </button>
-              <button className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium">
-                ➕ Create Room
-              </button>
-              <button className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium">
-                ➕ Quick Match
-              </button>
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Available Rooms:</span>
+                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">
+                  {socket.rooms.availableRooms.length}
+                </span>
+              </div>
+              
+              {socket.rooms.currentRoom && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded">
+                  <p className="text-green-800 font-medium">Current Room:</p>
+                  <p className="text-green-700 text-sm">{socket.rooms.currentRoom.name}</p>
+                  <p className="text-green-600 text-xs">
+                    Players: {socket.rooms.currentRoom.currentPlayerCount}/{socket.rooms.currentRoom.maxPlayers}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <button 
+                  onClick={() => socket.getRoomList()}
+                  disabled={!socket.isAuthenticated || socket.rooms.isLoadingRooms}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {socket.rooms.isLoadingRooms ? '🔄 Loading...' : '🔄 Refresh Rooms'}
+                </button>
+                <button 
+                  disabled={!socket.isAuthenticated}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  ➕ Create Room
+                </button>
+                <button 
+                  disabled={!socket.isAuthenticated}
+                  className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  ⚡ Quick Match
+                </button>
+              </div>
             </div>
           </div>
 
@@ -268,17 +346,21 @@ export default function Home() {
               <div className="text-green-600 font-bold">✅ Backend</div>
               <div className="text-sm text-green-800">Express 5</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-green-600 font-bold">✅ Real-time</div>
-              <div className="text-sm text-green-800">Socket.IO</div>
+            <div className={`text-center p-3 rounded-lg ${socket.isConnected ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`font-bold ${socket.isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                {socket.isConnected ? '✅' : '❌'} Real-time
+              </div>
+              <div className={`text-sm ${socket.isConnected ? 'text-green-800' : 'text-red-800'}`}>Socket.IO</div>
             </div>
             <div className="text-center p-3 bg-green-50 rounded-lg">
               <div className="text-green-600 font-bold">✅ State</div>
               <div className="text-sm text-green-800">Redux</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-green-600 font-bold">✅ Auth</div>
-              <div className="text-sm text-green-800">JWT</div>
+            <div className={`text-center p-3 rounded-lg ${socket.isAuthenticated ? 'bg-green-50' : 'bg-yellow-50'}`}>
+              <div className={`font-bold ${socket.isAuthenticated ? 'text-green-600' : 'text-yellow-600'}`}>
+                {socket.isAuthenticated ? '✅' : '⏳'} Auth
+              </div>
+              <div className={`text-sm ${socket.isAuthenticated ? 'text-green-800' : 'text-yellow-800'}`}>JWT+Socket</div>
             </div>
             <div className="text-center p-3 bg-green-50 rounded-lg">
               <div className="text-green-600 font-bold">✅ UI</div>
@@ -287,12 +369,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Development Info */}
+        {/* Development Progress */}
         <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">
             🚀 Development Progress
           </h2>
-          <div className="grid md:grid-cols-4 gap-4 text-center">
+          <div className="grid md:grid-cols-5 gap-4 text-center">
             <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
               <div className="text-xl font-bold text-green-600">Phase 1</div>
               <div className="text-green-800">Foundation ✅</div>
@@ -303,15 +385,19 @@ export default function Home() {
             </div>
             <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
               <div className="text-xl font-bold text-green-600">Phase 3</div>
-              <div className="text-green-800">Real-time ✅</div>
+              <div className="text-green-800">Server Real-time ✅</div>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
+              <div className="text-xl font-bold text-green-600">Phase 4</div>
+              <div className="text-green-800">Client Auth ✅</div>
             </div>
             <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-              <div className="text-xl font-bold text-blue-600">Phase 4</div>
-              <div className="text-blue-800">Auth UI ✅</div>
+              <div className="text-xl font-bold text-blue-600">Phase 5</div>
+              <div className="text-blue-800">Real-time UI ✅</div>
             </div>
           </div>
           <div className="mt-4 text-center text-gray-600">
-            <p>🔧 Authenticated user interface with JWT token management</p>
+            <p>🔧 Real-time client integration with Socket.IO + Redux complete!</p>
           </div>
         </div>
       </div>
