@@ -375,7 +375,7 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-4 text-gray-800">
             🚀 Development Progress
           </h2>
-          <div className="grid md:grid-cols-5 gap-4 text-center">
+          <div className="grid md:grid-cols-4 lg:grid-cols-7 gap-4 text-center">
             <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
               <div className="text-xl font-bold text-green-600">Phase 1</div>
               <div className="text-green-800">Foundation ✅</div>
@@ -392,13 +392,27 @@ export default function Home() {
               <div className="text-xl font-bold text-green-600">Phase 4</div>
               <div className="text-green-800">Client Auth ✅</div>
             </div>
-            <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-              <div className="text-xl font-bold text-blue-600">Phase 5</div>
-              <div className="text-blue-800">Real-time UI ✅</div>
+            <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
+              <div className="text-xl font-bold text-green-600">Phase 5</div>
+              <div className="text-green-800">Real-time UI ✅</div>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
+              <div className="text-xl font-bold text-green-600">Phase 6</div>
+              <div className="text-green-800">Room Management ✅</div>
+            </div>
+            <div 
+              className="p-4 bg-purple-50 rounded-lg border-2 border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors"
+              onClick={() => window.open('/demo/game-layout', '_blank')}
+              title="Click to view Game Interface Demo"
+            >
+              <div className="text-xl font-bold text-purple-600">Phase 7</div>
+              <div className="text-purple-800">Game Interface ✅</div>
+              <div className="text-xs text-purple-600 mt-1">🎮 Click to Demo</div>
             </div>
           </div>
           <div className="mt-4 text-center text-gray-600">
-            <p>🔧 Real-time client integration with Socket.IO + Redux complete!</p>
+            <p>🎮 Complete game interface with authentic Dou Dizhu cards and layout!</p>
+            <p className="text-sm mt-1">Click Phase 7 to test the game components</p>
           </div>
         </div>
       </div>
