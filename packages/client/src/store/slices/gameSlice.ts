@@ -396,6 +396,8 @@ const gameSlice = createSlice({
     });
     builder.addCase(playCards.fulfilled, (state) => {
       state.isPlayingCards = false;
+      state.selectedCards = []; // Clear selected cards on successful play
+      state.lastAction = 'Cards played successfully';
     });
     builder.addCase(playCards.rejected, (state, action) => {
       state.isPlayingCards = false;
@@ -409,6 +411,8 @@ const gameSlice = createSlice({
     });
     builder.addCase(passTurn.fulfilled, (state) => {
       state.isPassing = false;
+      state.selectedCards = []; // Clear selected cards on successful pass
+      state.lastAction = 'Turn passed successfully';
     });
     builder.addCase(passTurn.rejected, (state, action) => {
       state.isPassing = false;

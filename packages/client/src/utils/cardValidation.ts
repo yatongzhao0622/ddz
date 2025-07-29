@@ -8,6 +8,12 @@ export interface ValidationResult {
   message: string;
 }
 
+export interface LastPlay {
+  userId: string;
+  cards: Card[];
+  handType: string;
+}
+
 // Get card value for comparison (higher value = stronger card)
 const getCardValue = (card: Card): number => {
   const rankValues: { [key in CardRank]: number } = {
@@ -204,9 +210,41 @@ const isValidStraight = (cards: Card[]): ValidationResult => {
   };
 };
 
+// Get hand strength for comparison
+const getHandStrength = (cards: Card[], handType: string): number => {
+  if (handType === 'rocket') return Number.MAX_SAFE_INTEGER;
+  if (handType === 'bomb') return getCardValue(cards[0]) + 1000;
+  return getCardValue(cards[0]);
+};
+
+// Compare two hands to see if newHand beats lastHand
+const isHandBigger = (newHand: { cards: Card[]; handType: string }, lastHand: { cards: Card[]; handType: string }): boolean => {
+  // Rocket beats everything
+  if (newHand.handType === 'rocket') return true;
+  if (lastHand.handType === 'rocket') return false;
+
+  // Bomb beats everything except rocket and bigger bomb
+  if (newHand.handType === 'bomb' && lastHand.handType !== 'bomb') return true;
+  if (lastHand.handType === 'bomb' && newHand.handType !== 'bomb') return false;
+
+  // For same hand types, compare values
+  if (newHand.handType === lastHand.handType) {
+    return getHandStrength(newHand.cards, newHand.handType) > getHandStrength(lastHand.cards, lastHand.handType);
+  }
+
+  // Different hand types (except bombs/rocket) can't beat each other
+  return false;
+};
+
 // Main validation function
-export const validateCardHand = (selectedCardIds: string[], allCards: Card[]): ValidationResult => {
+export const validateCardHand = (
+  selectedCardIds: string[], 
+  allCards: Card[], 
+  lastPlay?: LastPlay, 
+  currentUserId?: string
+): ValidationResult => {
   console.log(`🎮 Validating hand with ${selectedCardIds.length} cards:`, selectedCardIds);
+  console.log(`🎮 Last play:`, lastPlay);
   
   if (selectedCardIds.length === 0) {
     return {
@@ -239,21 +277,50 @@ export const validateCardHand = (selectedCardIds: string[], allCards: Card[]): V
     isValidStraight(selectedCards)
   ];
 
-  // Return the first valid result
+  // Find valid hand type
+  let validHand: ValidationResult | null = null;
   for (const result of validations) {
     if (result.isValid) {
-      console.log(`🎮 Valid hand found:`, result);
-      return result;
+      validHand = result;
+      break;
     }
   }
 
-  // If no valid hand found
-  const result = {
-    isValid: false,
-    handType: 'invalid',
-    message: '无效的牌型组合'
-  };
-  
-  console.log(`🎮 Invalid hand:`, result);
-  return result;
+  // If no valid hand type found
+  if (!validHand) {
+    const result = {
+      isValid: false,
+      handType: 'invalid',
+      message: '无效的牌型组合'
+    };
+    console.log(`🎮 Invalid hand:`, result);
+    return result;
+  }
+
+  // If there's a last play and it's not from current user, validate if this hand can beat it
+  if (lastPlay && lastPlay.cards.length > 0 && lastPlay.userId !== currentUserId) {
+    const canBeatLastPlay = isHandBigger(
+      { cards: selectedCards, handType: validHand.handType },
+      { cards: lastPlay.cards, handType: lastPlay.handType }
+    );
+
+    if (!canBeatLastPlay) {
+      return {
+        isValid: false,
+        handType: validHand.handType,
+        message: '出的牌必须大于上家'
+      };
+    }
+  }
+
+  console.log(`🎮 Valid hand found:`, validHand);
+  return validHand;
+};
+
+// Function to check if user can pass
+export const canPass = (lastPlay?: LastPlay, currentUserId?: string): boolean => {
+  // Can't pass if:
+  // 1. No last play
+  // 2. Last play was from current user
+  return !!(lastPlay && lastPlay.cards.length > 0 && lastPlay.userId !== currentUserId);
 }; 

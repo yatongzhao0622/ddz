@@ -415,6 +415,21 @@ export class SocketService {
       console.log('🎮 SocketService - Game started - room ID:', data.room?.id);
       this.notifyListeners('gameStarted', data);
     });
+
+    this.socket.on('gameStateUpdated', (data: unknown) => {
+      console.log('🎮 SocketService - Game state updated:', data);
+      this.notifyListeners('gameStateUpdated', data);
+    });
+
+    this.socket.on('cardsPlayResult', (data: unknown) => {
+      console.log('🎮 SocketService - Cards play result:', data);
+      this.notifyListeners('cardsPlayResult', data);
+    });
+
+    this.socket.on('passResult', (data: unknown) => {
+      console.log('🎮 SocketService - Pass result:', data);
+      this.notifyListeners('passResult', data);
+    });
   }
 
   // Reconnection with exponential backoff

@@ -238,8 +238,7 @@ export default function RoomPage() {
 
       if (playCards.fulfilled.match(resultAction)) {
         console.log(`✅ Cards played successfully:`, resultAction.payload);
-        // Clear selected cards after successful play
-        dispatch(clearSelectedCards());
+        // Selected cards are cleared automatically in the Redux slice
       } else if (playCards.rejected.match(resultAction)) {
         console.error('🎮 handleCardPlay - Play cards rejected:');
         console.error('🎮 handleCardPlay - Rejection reason:', resultAction.error);
@@ -248,7 +247,7 @@ export default function RoomPage() {
         
         // Show user-friendly error message
         const errorMessage = resultAction.error?.message || 
-                            (typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to play cards');
+                           (typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to play cards');
         console.error('🎮 handleCardPlay - Final error message:', errorMessage);
       } else {
         console.error('🎮 handleCardPlay - Unknown result type:', resultAction);
@@ -288,8 +287,7 @@ export default function RoomPage() {
 
       if (passTurn.fulfilled.match(resultAction)) {
         console.log(`✅ Pass turn successful:`, resultAction.payload);
-        // Clear selected cards after successful pass
-        dispatch(clearSelectedCards());
+        // Selected cards are cleared automatically in the Redux slice
       } else if (passTurn.rejected.match(resultAction)) {
         console.error('🎮 handlePass - Pass turn rejected:');
         console.error('🎮 handlePass - Rejection reason:', resultAction.error);
@@ -298,7 +296,7 @@ export default function RoomPage() {
         
         // Show user-friendly error message
         const errorMessage = resultAction.error?.message || 
-                            (typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to pass turn');
+                           (typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to pass turn');
         console.error('🎮 handlePass - Final error message:', errorMessage);
       } else {
         console.error('🎮 handlePass - Unknown result type:', resultAction);

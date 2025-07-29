@@ -1,12 +1,12 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
+import { Inter } from 'next/font/google';
 import ReduxProvider from '../providers/ReduxProvider';
 import NetworkStatus from '../components/common/NetworkStatus';
+import RoomRedirect from '../components/common/RoomRedirect';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: '斗地主 Online - Dou Dizhu Card Game',
   description: 'Play Dou Dizhu (Fight the Landlord) card game online with friends',
 };
@@ -20,7 +20,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ReduxProvider>
-          {children}
+          <RoomRedirect />
+          <div className="min-h-screen bg-gray-50">
+            {children}
+          </div>
           <NetworkStatus />
         </ReduxProvider>
       </body>

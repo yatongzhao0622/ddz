@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { GameState, GamePlayer, GamePhase } from '../../types/game';
-import { validateCardHand } from '../../utils/cardValidation';
+import { GameState, GamePlayer, GamePhase, PlayedCards } from '../../types/game';
+import { validateCardHand, canPass } from '../../utils/cardValidation';
 import Card from './Card';
 
 interface PlayAreaProps {
@@ -23,47 +23,37 @@ const PlayArea: React.FC<PlayAreaProps> = ({
   onBid
 }) => {
   const isMyTurn = currentPlayer && gameState.currentTurn === currentPlayer.position;
+  const lastPlay = gameState.lastPlay;
 
   const renderBiddingControls = () => {
     if (gameState.phase !== 'bidding' || !isMyTurn) {
       return null;
     }
 
-    const handleBidClick = (amount: number) => {
-      console.log(`🎮 PlayArea - Bid button clicked: ${amount === 0 ? '不叫' : amount + '分'}`);
-      console.log(`🎮 PlayArea - onBid function exists:`, !!onBid);
-      if (onBid) {
-        console.log(`🎮 PlayArea - Calling onBid(${amount})`);
-        onBid(amount);
-      } else {
-        console.error('🎮 PlayArea - onBid function is not provided!');
-      }
-    };
-
     return (
-      <div className="bg-white bg-opacity-90 rounded-lg p-4 shadow-lg">
+      <div className="flex flex-col items-center justify-center space-y-4">
         <h3 className="text-lg font-semibold text-center mb-3">叫地主</h3>
-        <div className="flex space-x-2 justify-center">
+        <div className="flex space-x-4">
           <button
-            onClick={() => handleBidClick(0)}
+            onClick={() => onBid?.(0)}
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
           >
             不叫
           </button>
           <button
-            onClick={() => handleBidClick(1)}
+            onClick={() => onBid?.(1)}
             className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
           >
             1分
           </button>
           <button
-            onClick={() => handleBidClick(2)}
+            onClick={() => onBid?.(2)}
             className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
           >
             2分
           </button>
           <button
-            onClick={() => handleBidClick(3)}
+            onClick={() => onBid?.(3)}
             className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
           >
             3分
@@ -79,28 +69,56 @@ const PlayArea: React.FC<PlayAreaProps> = ({
     }
 
     const hasSelectedCards = selectedCards.length > 0;
-    
-    // Validate selected cards
-    const validation = validateCardHand(selectedCards, currentPlayer.cards);
+    const validation = validateCardHand(
+      selectedCards, 
+      currentPlayer.cards,
+      lastPlay ? {
+        userId: lastPlay.playerId,
+        cards: lastPlay.cards,
+        handType: lastPlay.cardType
+      } : undefined,
+      currentPlayer.userId
+    );
     const isValidHand = validation.isValid;
-    
-    console.log(`🎮 PlayArea - Selected cards count: ${selectedCards.length}`);
-    console.log(`🎮 PlayArea - Selected cards:`, selectedCards);
-    console.log(`🎮 PlayArea - hasSelectedCards:`, hasSelectedCards);
-    console.log(`🎮 PlayArea - Validation result:`, validation);
 
     return (
-      <div className="bg-white bg-opacity-90 rounded-lg p-4 shadow-lg">
-        <h3 className="text-lg font-semibold text-center mb-3">出牌</h3>
-        
-        {/* Hand validation feedback */}
+      <div className="flex flex-col items-center justify-center space-y-4">
+        {/* Show last play if exists */}
+        {lastPlay && lastPlay.cards.length > 0 && (
+          <div className="text-center mb-4">
+            <div className="text-sm text-gray-600 mb-1">上家出牌</div>
+            <div className="flex justify-center space-x-2">
+              {lastPlay.cards.map((card, index) => (
+                <Card key={index} card={card} size="small" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Show validation message if cards selected */}
         {hasSelectedCards && (
           <div className={`text-center text-sm mb-3 ${isValidHand ? 'text-green-600' : 'text-red-600'}`}>
             {validation.message}
           </div>
         )}
-        
-        <div className="flex space-x-3 justify-center">
+
+        {/* Action buttons */}
+        <div className="flex space-x-4">
+          {/* Pass button - only show if there's a last play and it's not from current player */}
+          {canPass(lastPlay ? {
+            userId: lastPlay.playerId,
+            cards: lastPlay.cards,
+            handType: lastPlay.cardType
+          } : undefined, currentPlayer.userId) && (
+            <button
+              onClick={onPass}
+              className="px-6 py-2 rounded bg-gray-500 text-white hover:bg-gray-600 transition-colors"
+            >
+              不要
+            </button>
+          )}
+
+          {/* Play button */}
           <button
             onClick={onCardPlay}
             disabled={!hasSelectedCards || !isValidHand}
@@ -112,19 +130,13 @@ const PlayArea: React.FC<PlayAreaProps> = ({
           >
             出牌 {hasSelectedCards ? `(${selectedCards.length})` : ''}
           </button>
-          <button
-            onClick={onPass}
-            className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-          >
-            不要
-          </button>
         </div>
       </div>
     );
   };
 
   const renderLastPlayedCards = () => {
-    if (!gameState.lastPlay || !gameState.lastPlay.cards?.length) {
+    if (!lastPlay || !lastPlay.cards?.length) {
       return (
         <div className="text-white text-center">
           <p className="text-lg">等待出牌...</p>
@@ -132,7 +144,6 @@ const PlayArea: React.FC<PlayAreaProps> = ({
       );
     }
 
-    const lastPlay = gameState.lastPlay;
     const player = gameState.players.find(p => p.userId === lastPlay.playerId);
 
     return (
