@@ -26,6 +26,14 @@ export interface ServerToClientEvents {
   roomLeft: (data: { success: boolean; message?: string }) => void;
   error: (data: { message: string; code: string }) => void;
   gameStateRestored: (data: { success: boolean; game: any; room: any; message: string }) => void;
+  roomJoined: (data: { success: boolean; room: any }) => void;
+  bidProcessed: (data: { success: boolean; amount: number; message: string }) => void;
+  cardsPlayResult: (data: { success: boolean; cardIds: string[]; message: string }) => void;
+  passResult: (data: { success: boolean; message: string }) => void;
+  biddingComplete: (data: { game: any; landlord: string; message: string }) => void;
+  cardsPlayed: (data: { game: any; player: string; cardIds: string[]; message: string }) => void;
+  turnPassed: (data: { game: any; player: string; message: string }) => void;
+  gameStateUpdated: (data: any) => void;
 }
 
 // Socket user data interface
@@ -62,44 +70,11 @@ export class SocketService {
 
       // Handle authentication
       socket.on('authenticate', (data: { token: string }) => {
-        console.log(`🔐 SocketService - Authentication request from ${socket.id}`);
-        const userData = verifyToken(data.token);
-        if (userData) {
-          socket.userData = userData;
-          
-          // Join user-specific room for personalized game updates
-          socket.join(`user_${userData.userId}`);
-          console.log(`✅ SocketService - Socket ${socket.id} joined user room: user_${userData.userId}`);
-          
-          // Add to connected users map
-          this.connectedUsers.set(socket.id, {
-            userId: userData.userId,
-            username: userData.username,
-            socketId: socket.id,
-            connectedAt: new Date()
-          });
-
-          socket.emit('authenticated', { 
-            success: true, 
-            user: { 
-              id: userData.userId, 
-              username: userData.username 
-            } 
-          });
-          
-          console.log(`✅ SocketService - User ${userData.username} authenticated and joined user room`);
-        } else {
-          console.error('❌ SocketService - Invalid token during authentication');
-          socket.emit('authenticated', { success: false, error: 'Invalid token' });
-        }
+        this.handleAuthentication(socket, data.token);
       });
 
       // Room event handlers (require authentication)
       socket.on('joinRoom', async (data: { roomId: string }) => {
-        if (!socket.userData) {
-          socket.emit('error', { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
-          return;
-        }
         await this.handleJoinRoom(socket, data.roomId);
       });
 
@@ -153,224 +128,110 @@ export class SocketService {
 
   private async handleAuthentication(socket: AuthenticatedSocket, token: string): Promise<void> {
     try {
-      // Verify token
-      const payload = verifyToken(token);
-      if (!payload) {
-        socket.emit('authenticated', {
-          success: false,
-          error: 'Invalid token'
-        });
+      console.log(`🔐 SocketService - Authentication request from ${socket.id}`);
+      const userData = verifyToken(token);
+      if (!userData) {
+        console.error('❌ SocketService - Invalid token during authentication');
+        socket.emit('error', { message: 'Invalid token', code: 'INVALID_TOKEN' });
         return;
       }
 
-      // Get user from database
-      const user = await User.findById(payload.userId);
-      if (!user) {
-        socket.emit('authenticated', {
-          success: false,
-          error: 'User not found'
-        });
-        return;
-      }
+      socket.userData = userData;
+      
+      // Join user-specific room for personalized game updates
+      socket.join(`user_${userData.userId}`);
+      console.log(`✅ SocketService - Socket ${socket.id} joined user room: user_${userData.userId}`);
+      
+      // Add to connected users map
+      this.connectedUsers.set(socket.id, socket);
 
       // Update user online status
-      await user.updateLoginStatus(true);
-
-      // Store user data in socket
-      socket.userData = {
-        userId: user._id.toString(),
-        username: user.username,
-        roomId: user.currentRoomId?.toString()
-      };
-
-      // Track connected user
-      this.connectedUsers.set(socket.userData.userId, socket);
-
-      // Join user's current room if they have one
-      if (socket.userData.roomId) {
-        socket.join(`room_${socket.userData.roomId}`);
+      const user = await User.findById(userData.userId);
+      if (user) {
+        await user.updateLoginStatus(true);
+        
+        // Update player connection status in room if they're in one
+        const room = await Room.findOne({ 'players.userId': userData.userId });
+        if (room) {
+          await room.updatePlayerConnection(userData.userId, true);
+          this.broadcastToRoom(room._id.toString(), 'roomUpdated', { room: room.toSafeObject() });
+        }
       }
 
-      socket.emit('authenticated', {
-        success: true,
-        user: {
-          id: user._id,
-          username: user.username,
-          roomId: user.currentRoomId?.toString() || null
-        }
+      socket.emit('authenticated', { 
+        success: true, 
+        user: { 
+          id: userData.userId, 
+          username: userData.username 
+        } 
       });
-
-      console.log(`✅ User authenticated: ${user.username} (${socket.id})`);
+      
+      console.log(`✅ SocketService - User ${userData.username} authenticated and joined user room`);
     } catch (error) {
-      console.error('Authentication error:', error);
-      socket.emit('authenticated', {
-        success: false,
-        error: 'Authentication failed'
-      });
+      console.error('❌ SocketService - Authentication error:', error);
+      socket.emit('error', { message: 'Authentication failed', code: 'AUTH_ERROR' });
     }
   }
 
   private async handleJoinRoom(socket: AuthenticatedSocket, roomId: string): Promise<void> {
     try {
-      console.log(`🔍 handleJoinRoom - Attempting to join room: ${roomId}`);
-      console.log(`🔍 handleJoinRoom - Room ID type: ${typeof roomId}, length: ${roomId.length}`);
-      
-      // Validate ObjectId format
-      if (!mongoose.Types.ObjectId.isValid(roomId)) {
-        console.log(`❌ handleJoinRoom - Invalid ObjectId format: ${roomId}`);
-        socket.emit('error', { message: 'Invalid room ID format', code: 'INVALID_ROOM_ID' });
+      if (!socket.userData) {
+        socket.emit('error', { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
         return;
       }
-      
+
+      console.log(`🎮 SocketService - ${socket.userData.username} requesting to join room ${roomId}`);
+
+      // Find room
       const room = await Room.findById(roomId);
       if (!room) {
-        console.log(`❌ handleJoinRoom - Room not found for ID: ${roomId}`);
-        
-        // List all rooms for debugging
-        const allRooms = await Room.find({}).select('_id roomName');
-        console.log(`🔍 handleJoinRoom - Available rooms:`, allRooms.map(r => ({ id: r._id.toString(), name: r.roomName })));
-        
         socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
         return;
       }
 
-      console.log(`✅ handleJoinRoom - Found room: ${room.roomName} (${room._id})`);
-
-      // First, check if player is already in room (allows reconnection even if room is full)
+      // Check if player is already in room
       const existingPlayer = room.players.find(p => p.userId.toString() === socket.userData!.userId);
       if (existingPlayer) {
-        console.log(`✅ handleJoinRoom - Player already in room, updating connection`);
-        console.log(`🔍 DEBUG - Room status: ${room.status}`);
-        console.log(`🔍 DEBUG - Room ID: ${roomId}`);
-        console.log(`🔍 DEBUG - GameService available: ${!!this.gameService}`);
-        
-        // Player already in room, just join the socket room
+        // If player is already in room, just update their connection status and join socket room
+        await room.updatePlayerConnection(socket.userData.userId, true);
         socket.join(`room_${roomId}`);
-        socket.userData!.roomId = roomId;
         
-        // Send current room state to the player who just connected
-        socket.emit('roomUpdated', {
+        // Broadcast room update
+        this.broadcastToRoom(roomId, 'roomUpdated', { room: room.toSafeObject() });
+        
+        socket.emit('roomJoined', {
+          success: true,
           room: room.toSafeObject()
         });
-        
-        // Check if there's an active game and restore game state for reconnecting player
-        if (room.status === 'playing' && this.gameService && room.gameSession) {
-          console.log(`🎮 Restoring game state for reconnecting player: ${socket.userData!.username}`);
-          console.log(`🔍 DEBUG - Socket ID: ${socket.id}`);
-          console.log(`🔍 DEBUG - Socket connected: ${socket.connected}`);
-          console.log(`🔍 DEBUG - Socket rooms: ${JSON.stringify([...socket.rooms])}`);
-          console.log(`🔍 DEBUG - Room gameSession (DB): ${room.gameSession}`);
-          console.log(`🔍 DEBUG - Room toSafeObject:`, room.toSafeObject());
-          console.log(`🔍 DEBUG - About to call this.gameService.getGame(${roomId})`);
-          try {
-            const game = await this.gameService.getGame(roomId);
-            console.log(`🔍 DEBUG - Game found: ${!!game}`);
-            if (game) {
-              console.log(`🔍 DEBUG - Game object type: ${typeof game}`);
-              console.log(`🔍 DEBUG - Game toSafeObject method exists: ${typeof game.toSafeObject}`);
-              const gameData = game.toSafeObject();
-              console.log(`🔍 DEBUG - Game data keys: ${Object.keys(gameData)}`);
-              console.log(`🔍 DEBUG - Game data sample:`, { 
-                phase: gameData.phase, 
-                players: gameData.players?.length,
-                gameId: gameData.gameId 
-              });
-              
-              const eventPayload = {
-                success: true,
-                game: gameData,
-                room: room.toSafeObject(),
-                message: '游戏状态已恢复'
-              };
-              
-              console.log(`🔍 DEBUG - About to emit gameStateRestored with payload keys: ${Object.keys(eventPayload)}`);
-              
-              // Add a small delay to ensure client is properly connected and listening
-              setTimeout(() => {
-                console.log(`🔍 DEBUG - Emitting gameStateRestored to socket ${socket.id}`);
-                socket.emit('gameStateRestored', eventPayload);
-                
-                // Send a roomUpdated event to verify the connection works
-                console.log(`🔍 DEBUG - Emitting roomUpdated test event to socket ${socket.id}`);
-                socket.emit('roomUpdated', { room: room.toSafeObject() });
-                
-                console.log(`✅ Game state restored for ${socket.userData!.username}`);
-              }, 100);
-            } else {
-              console.log(`❌ No game found for room ${roomId} despite gameSession ${room.gameSession}`);
-            }
-          } catch (error) {
-            console.error('❌ Failed to restore game state:', error);
-          }
-        } else {
-          console.log(`🔍 DEBUG - Not restoring game state. Room status: ${room.status}, GameService: ${!!this.gameService}, GameSession: ${room.gameSession}`);
-        }
-        
-        // Also broadcast that the player reconnected (to update connection status)
-        this.io.to(`room_${roomId}`).emit('playerJoined', {
-          room: room.toSafeObject(),
-          player: {
-            userId: socket.userData!.userId,
-            username: socket.userData!.username,
-            isReady: existingPlayer.isReady,
-            isConnected: true
-          }
-        });
-        
-        // Update room list for all clients
-        this.broadcastRoomList();
         return;
       }
 
-      // Now check if new players can join
-      if (room.status !== 'waiting') {
-        console.log(`❌ handleJoinRoom - Room is not in waiting status: ${room.status}`);
-        socket.emit('error', { message: 'Room is not accepting new players', code: 'ROOM_NOT_WAITING' });
-        return;
-      }
-
-      if (room.players.length >= room.maxPlayers) {
-        console.log(`❌ handleJoinRoom - Room is full: ${room.players.length}/${room.maxPlayers}`);
-        socket.emit('error', { message: 'Room is full', code: 'ROOM_FULL' });
-        return;
-      }
-
-      // Add new player to room
-      const updatedRoom = await room.addPlayer(
-        socket.userData!.userId as any,
-        socket.userData!.username
-      );
-
-      console.log(`✅ handleJoinRoom - Player ${socket.userData!.username} added to room`);
+      // Add player to room
+      await room.addPlayer(socket.userData.userId, socket.userData.username);
+      socket.join(`room_${roomId}`);
 
       // Update user's current room
-      const user = await User.findById(socket.userData!.userId);
+      const user = await User.findById(socket.userData.userId);
       if (user) {
         await user.joinRoom(room._id);
       }
 
-      // Join socket room
-      socket.join(`room_${roomId}`);
-      socket.userData!.roomId = roomId;
-
-      // Broadcast to room
-      this.io.to(`room_${roomId}`).emit('roomUpdated', {
-        room: updatedRoom.toSafeObject()
-      });
-
-      this.io.to(`room_${roomId}`).emit('playerJoined', {
-        room: updatedRoom.toSafeObject(),
+      // Broadcast room update and player joined event
+      this.broadcastToRoom(roomId, 'roomUpdated', { room: room.toSafeObject() });
+      this.broadcastToRoom(roomId, 'playerJoined', {
+        room: room.toSafeObject(),
         player: {
-          userId: socket.userData!.userId,
-          username: socket.userData!.username
+          userId: socket.userData.userId,
+          username: socket.userData.username
         }
       });
 
-      // Update room list for all clients
-      this.broadcastRoomList();
+      // Broadcast updated room list to all users
+      await this.broadcastRoomList();
 
+      console.log(`✅ SocketService - ${socket.userData.username} joined room ${roomId}`);
     } catch (error) {
-      console.error('❌ handleJoinRoom error:', error);
+      console.error('Join room error:', error);
       socket.emit('error', { 
         message: error instanceof Error ? error.message : 'Failed to join room', 
         code: 'JOIN_ROOM_ERROR' 
@@ -598,21 +459,33 @@ export class SocketService {
   private async handleDisconnection(socket: AuthenticatedSocket, reason: string): Promise<void> {
     if (socket.userData) {
       // Remove from connected users
-      this.connectedUsers.delete(socket.id); // Changed to socket.id
+      this.connectedUsers.delete(socket.id);
 
       // Update user offline status with a delay to handle quick reconnections (page refresh)
       const userData = socket.userData; // Capture userData before timeout
       setTimeout(async () => {
         try {
-          // Check if user reconnected in the meantime
-          if (!this.connectedUsers.has(socket.id)) { // Changed to socket.id
+          // Check if user has any active sockets
+          const hasActiveSockets = Array.from(this.connectedUsers.values()).some(
+            s => s.userData?.userId === userData.userId
+          );
+
+          if (!hasActiveSockets) {
             const user = await User.findById(userData.userId);
             if (user) {
               await user.updateLoginStatus(false);
+              
+              // Update player connection status in room if they're in one
+              const room = await Room.findOne({ 'players.userId': userData.userId });
+              if (room) {
+                await room.updatePlayerConnection(userData.userId, false);
+                this.broadcastToRoom(room._id.toString(), 'roomUpdated', { room: room.toSafeObject() });
+              }
+              
               console.log(`🔌 User marked offline after timeout: ${userData.username}`);
             }
           } else {
-            console.log(`🔌 User reconnected, not marking offline: ${userData.username}`);
+            console.log(`🔌 User still has active connections: ${userData.username}`);
           }
         } catch (error) {
           console.error('Error updating user offline status:', error);
@@ -648,6 +521,12 @@ export class SocketService {
     } catch (error) {
       console.error('❌ Failed to broadcast room list:', error);
     }
+  }
+
+  private broadcastToRoom(roomId: string, event: keyof ServerToClientEvents, data: any): void {
+    const roomName = `room_${roomId}`;
+    console.log(`🔊 Broadcasting '${event}' to room '${roomName}'`);
+    this.io.to(roomName).emit(event, data);
   }
 
   // Public methods for external use

@@ -150,12 +150,6 @@ export default function RoomCard({ room, onJoinRoom, currentUserId, isJoining }:
             >
               🎮 进入房间
             </button>
-            <button
-              onClick={handleRoomNameClick}
-              className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
-            >
-              👁️ 查看详情
-            </button>
           </>
         ) : canJoin ? (
           <>
@@ -166,12 +160,6 @@ export default function RoomCard({ room, onJoinRoom, currentUserId, isJoining }:
             >
               {isJoining ? '🔄 加入中...' : '🚪 加入房间'}
             </button>
-            <button
-              onClick={handleRoomNameClick}
-              className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
-            >
-              👁️ 查看详情
-            </button>
           </>
         ) : (
           <>
@@ -180,12 +168,6 @@ export default function RoomCard({ room, onJoinRoom, currentUserId, isJoining }:
               className="w-full bg-gray-300 text-gray-500 py-2 px-4 rounded-lg cursor-not-allowed font-medium"
             >
               {isRoomFull ? '🚫 房间已满' : room.status === 'playing' ? '🎮 游戏进行中' : '❌ 无法加入'}
-            </button>
-            <button
-              onClick={handleRoomNameClick}
-              className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
-            >
-              👁️ 查看详情
             </button>
           </>
         )}

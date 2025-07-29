@@ -9,6 +9,7 @@ export interface IRoom extends Document {
     userId: mongoose.Types.ObjectId;
     username: string;
     isReady: boolean;
+    isConnected: boolean;
     joinedAt: Date;
   }[];
   status: 'waiting' | 'playing' | 'finished';
@@ -26,6 +27,7 @@ export interface IRoom extends Document {
   addPlayer(userId: mongoose.Types.ObjectId, username: string): Promise<IRoom>;
   removePlayer(userId: mongoose.Types.ObjectId): Promise<IRoom>;
   togglePlayerReady(userId: mongoose.Types.ObjectId): Promise<IRoom>;
+  updatePlayerConnection(userId: mongoose.Types.ObjectId, isConnected: boolean): Promise<IRoom>;
   checkAllPlayersReady(): boolean;
   canStartGame(): boolean;
   startGame(): Promise<IRoom>;
@@ -61,6 +63,10 @@ const PlayerSchema = new Schema({
   isReady: {
     type: Boolean,
     default: false
+  },
+  isConnected: {
+    type: Boolean,
+    default: true
   },
   joinedAt: {
     type: Date,
@@ -145,8 +151,7 @@ RoomSchema.methods.addPlayer = async function(userId: mongoose.Types.ObjectId, u
   }
   
   // Check if player already in room
-  const existingPlayer = this.players.find((p: IRoom['players'][0]) => p.userId.toString() === userId.toString());
-  if (existingPlayer) {
+  if (this.players.some((p: IRoom['players'][0]) => p.userId.toString() === userId.toString())) {
     throw new Error('Player already in room');
   }
   
@@ -155,6 +160,7 @@ RoomSchema.methods.addPlayer = async function(userId: mongoose.Types.ObjectId, u
     userId,
     username,
     isReady: false,
+    isConnected: true,
     joinedAt: new Date()
   });
   
@@ -184,6 +190,15 @@ RoomSchema.methods.togglePlayerReady = async function(userId: mongoose.Types.Obj
   }
   
   player.isReady = !player.isReady;
+  return await this.save();
+};
+
+RoomSchema.methods.updatePlayerConnection = async function(userId: mongoose.Types.ObjectId, isConnected: boolean): Promise<IRoom> {
+  const player = this.players.find((p: IRoom['players'][0]) => p.userId.toString() === userId.toString());
+  if (!player) {
+    throw new Error('Player not found in room');
+  }
+  player.isConnected = isConnected;
   return await this.save();
 };
 
@@ -305,6 +320,7 @@ RoomSchema.statics.createRoom = async function(roomData: {
       userId: roomData.createdBy,
       username: roomData.creatorUsername,
       isReady: false,
+      isConnected: true,
       joinedAt: new Date()
     }],
     settings: {

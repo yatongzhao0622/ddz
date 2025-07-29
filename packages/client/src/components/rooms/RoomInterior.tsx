@@ -27,10 +27,9 @@ export default function RoomInterior({
 }: RoomInteriorProps) {
   const [showSettings, setShowSettings] = useState(false);
 
-  const currentPlayer = room.players.find(p => p.userId === currentUserId);
   const isRoomCreator = room.createdBy === currentUserId;
   const canStartGame = isRoomCreator && 
-    room.players.length >= 2 && 
+    room.players.length >= 3 && 
     room.players.every(p => p.isReady || p.userId === currentUserId) &&
     room.status === 'waiting';
 
@@ -248,7 +247,7 @@ export default function RoomInterior({
                       ) : canStartGame ? (
                         '🎮 开始游戏'
                       ) : (
-                        `⏳ 等待所有玩家准备 (${getReadyPlayersCount()}/${room.currentPlayerCount})`
+                        `⏳ 等待所有玩家准备 (${getReadyPlayersCount()}/${room.maxPlayers})`
                       )}
                     </button>
                   </div>

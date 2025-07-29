@@ -31,6 +31,9 @@ const redis = connectRedis();
 // Initialize Socket.IO service
 const socketService = new SocketService(io);
 
+// Register socket service with Express app
+app.set('socketService', socketService);
+
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || "http://localhost:3000",

@@ -77,6 +77,13 @@ router.post('/create', authenticateToken, requireUserNotInRoom, async (req: Auth
     // Update user's current room
     await req.user!.joinRoom(room._id);
 
+    // Get the socket service instance from the request
+    const socketService = (req.app as any).get('socketService');
+    if (socketService) {
+      // Broadcast room list update to all connected users
+      await socketService.broadcastRoomList();
+    }
+
     res.status(201).json({
       success: true,
       message: 'Room created successfully',
